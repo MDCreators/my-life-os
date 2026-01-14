@@ -8,24 +8,24 @@ import streamlit.components.v1 as components
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Life OS", page_icon="🌸", layout="centered")
 
-# --- FEEDBACK FUNCTION (Sound + Vibrate) ---
+# --- SOUND & VIBRATION FUNCTION ---
 def trigger_feedback():
-    # Ye code Vibration + Sound dono try karega
-    # Sound URL: Short 'Ding' sound
-    sound_url = "https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3"
-    
-    js = f"""
+    # 1. VIBRATION (JavaScript Attempt)
+    # Hum browser ko 'User Gesture' dikhane ki koshish kar rahay hain
+    vibrate_js = """
     <script>
-    // 1. Try Vibration
-    if (window.navigator && window.navigator.vibrate) {{
-        window.navigator.vibrate(200);
-    }}
-    // 2. Play Sound
-    var audio = new Audio('{sound_url}');
-    audio.play();
+    navigator.vibrate = navigator.vibrate || navigator.webkitVibrate || navigator.mozVibrate || navigator.msVibrate;
+    if (navigator.vibrate) {
+        navigator.vibrate([200]);
+    }
     </script>
     """
-    components.html(js, height=0, width=0)
+    components.html(vibrate_js, height=0, width=0)
+    
+    # 2. SOUND (Streamlit Native Autoplay)
+    # Ye invisible player hai jo automatically chalay ga
+    # Short "Ding" Sound
+    st.audio("https://www.soundjay.com/buttons/sounds/button-3.mp3", format="audio/mp3", autoplay=True)
 
 # --- SESSION STATE ---
 if 'user_name' not in st.session_state: st.session_state.user_name = "User"
@@ -51,7 +51,7 @@ def check_password():
         try:
             users = st.secrets["users"]
         except:
-            st.warning("⚠️ Setup Incomplete: Add [users] to Secrets.")
+            st.warning("⚠️ Add [users] to Secrets.")
             return True 
             
         with st.form("Login"):
@@ -79,29 +79,12 @@ if check_password():
     st.markdown("""
         <style>
         .stApp { background-color: #0E1117; color: #FAFAFA; }
-        .stButton>button { 
-            color: white !important; 
-            background-color: #FF1493 !important; 
-            border-radius: 12px; 
-            border: none; 
-            font-weight: bold; 
-        }
-        .stTextInput>div>div>input { 
-            background-color: #262730; 
-            color: white !important; 
-            border-radius: 10px; 
-        }
-        .big-score { 
-            font-size: 24px; 
-            font-weight: bold; 
-            color: #00FF7F; 
-            text-align: center; 
-        }
-        .streak-num { 
-            font-size: 26px; 
-            font-weight: bold; 
-            color: #00BFFF; 
-        }
+        .stButton>button { color: white !important; background-color: #FF1493 !important; border-radius: 12px; border: none; font-weight: bold; }
+        .stTextInput>div>div>input { background-color: #262730; color: white !important; border-radius: 10px; }
+        .big-score { font-size: 24px; font-weight: bold; color: #00FF7F; text-align: center; }
+        .streak-num { font-size: 26px; font-weight: bold; color: #00BFFF; }
+        /* Hide Audio Player */
+        audio { display: none; }
         </style>
         """, unsafe_allow_html=True)
 
@@ -133,7 +116,7 @@ if check_password():
                     if not goal['done']:
                         st.session_state.goals[i]['done'] = True
                         st.session_state.life_score += 10
-                        trigger_feedback()
+                        trigger_feedback() # SOUND HERE
                         st.balloons()
                         st.rerun()
                 else:
@@ -159,21 +142,19 @@ if check_password():
             if st.button("➕"):
                 if new_h:
                     st.session_state.habits.append({"name": new_h, "streak": 0})
-                    trigger_feedback()
+                    trigger_feedback() # SOUND HERE
                     st.rerun()
         st.write("---")
         for i, habit in enumerate(st.session_state.habits):
             with st.container():
                 c1, c2, c3, c4 = st.columns([4, 2, 2, 1])
-                with c1: 
-                    st.markdown(f"**{habit['name']}**")
-                with c2: 
-                    st.markdown(f"<span class='streak-num'>{habit['streak']} 🔥</span>", unsafe_allow_html=True)
+                with c1: st.markdown(f"**{habit['name']}**")
+                with c2: st.markdown(f"<span class='streak-num'>{habit['streak']} 🔥</span>", unsafe_allow_html=True)
                 with c3:
                     if st.button("➕ 1", key=f"h_inc_{i}"):
                         st.session_state.habits[i]['streak'] += 1  
                         st.session_state.life_score += 5
-                        trigger_feedback()
+                        trigger_feedback() # SOUND HERE
                         st.rerun()
                 with c4:
                     if st.button("🗑️", key=f"h_del_{i}"):
@@ -201,15 +182,9 @@ if check_password():
                     amt = st.number_input("Amount", min_value=0)
                     if st.form_submit_button("Spend"):
                         st.session_state.total_savings -= amt
-                        entry = {
-                            "Date": pk_time.strftime("%Y-%m-%d"), 
-                            "Type": "Expense", 
-                            "Item": item, 
-                            "Amount": amt, 
-                            "Category": cat
-                        }
+                        entry = {"Date": pk_time.strftime("%Y-%m-%d"), "Type": "Expense", "Item": item, "Amount": amt, "Category": cat}
                         st.session_state.expenses.append(entry)
-                        trigger_feedback()
+                        trigger_feedback() # SOUND HERE
                         st.rerun()
             with c2:
                 with st.form("in_form"):
@@ -219,15 +194,9 @@ if check_password():
                     amt_in = st.number_input("Amount", min_value=0)
                     if st.form_submit_button("Deposit"):
                         st.session_state.total_savings += amt_in
-                        entry_in = {
-                            "Date": pk_time.strftime("%Y-%m-%d"), 
-                            "Type": "Income", 
-                            "Item": src, 
-                            "Amount": amt_in, 
-                            "Category": cat_in
-                        }
+                        entry_in = {"Date": pk_time.strftime("%Y-%m-%d"), "Type": "Income", "Item": src, "Amount": amt_in, "Category": cat_in}
                         st.session_state.expenses.append(entry_in)
-                        trigger_feedback()
+                        trigger_feedback() # SOUND HERE
                         st.rerun()
 
         with t2:
@@ -263,7 +232,7 @@ if check_password():
         new_count = sum(check_list)
         if new_count > st.session_state.water_count:
              st.session_state.water_count = new_count
-             trigger_feedback()
+             trigger_feedback() # SOUND HERE
              st.rerun()
 
         st.divider()
@@ -274,7 +243,7 @@ if check_password():
         st.text_area("Gratitude", placeholder="I am thankful for...")
         if st.button("Save Entry"):
             st.session_state.life_score += 5
-            trigger_feedback()
+            trigger_feedback() # SOUND HERE
             st.success("Saved!")
 
     # === SETUP ===
@@ -283,5 +252,5 @@ if check_password():
         new_name = st.text_input("Change Name", value=st.session_state.user_name)
         if st.button("Update"): 
             st.session_state.user_name = new_name
-            trigger_feedback()
+            trigger_feedback() # SOUND HERE
             st.rerun()
