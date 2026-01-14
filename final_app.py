@@ -8,13 +8,21 @@ import streamlit.components.v1 as components
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Life OS", page_icon="🌸", layout="centered")
 
-# --- VIBRATION FUNCTION ---
-def vibrate():
-    js = """
+# --- FEEDBACK FUNCTION (Sound + Vibrate) ---
+def trigger_feedback():
+    # Ye code Vibration + Sound dono try karega
+    # Sound URL: Short 'Ding' sound
+    sound_url = "https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3"
+    
+    js = f"""
     <script>
-    if (window.navigator && window.navigator.vibrate) {
+    // 1. Try Vibration
+    if (window.navigator && window.navigator.vibrate) {{
         window.navigator.vibrate(200);
-    }
+    }}
+    // 2. Play Sound
+    var audio = new Audio('{sound_url}');
+    audio.play();
     </script>
     """
     components.html(js, height=0, width=0)
@@ -125,7 +133,7 @@ if check_password():
                     if not goal['done']:
                         st.session_state.goals[i]['done'] = True
                         st.session_state.life_score += 10
-                        vibrate()
+                        trigger_feedback()
                         st.balloons()
                         st.rerun()
                 else:
@@ -151,7 +159,7 @@ if check_password():
             if st.button("➕"):
                 if new_h:
                     st.session_state.habits.append({"name": new_h, "streak": 0})
-                    vibrate()
+                    trigger_feedback()
                     st.rerun()
         st.write("---")
         for i, habit in enumerate(st.session_state.habits):
@@ -165,7 +173,7 @@ if check_password():
                     if st.button("➕ 1", key=f"h_inc_{i}"):
                         st.session_state.habits[i]['streak'] += 1  
                         st.session_state.life_score += 5
-                        vibrate()
+                        trigger_feedback()
                         st.rerun()
                 with c4:
                     if st.button("🗑️", key=f"h_del_{i}"):
@@ -193,7 +201,6 @@ if check_password():
                     amt = st.number_input("Amount", min_value=0)
                     if st.form_submit_button("Spend"):
                         st.session_state.total_savings -= amt
-                        # SAFE MULTI-LINE APPEND
                         entry = {
                             "Date": pk_time.strftime("%Y-%m-%d"), 
                             "Type": "Expense", 
@@ -202,7 +209,7 @@ if check_password():
                             "Category": cat
                         }
                         st.session_state.expenses.append(entry)
-                        vibrate()
+                        trigger_feedback()
                         st.rerun()
             with c2:
                 with st.form("in_form"):
@@ -212,7 +219,6 @@ if check_password():
                     amt_in = st.number_input("Amount", min_value=0)
                     if st.form_submit_button("Deposit"):
                         st.session_state.total_savings += amt_in
-                        # SAFE MULTI-LINE APPEND
                         entry_in = {
                             "Date": pk_time.strftime("%Y-%m-%d"), 
                             "Type": "Income", 
@@ -221,7 +227,7 @@ if check_password():
                             "Category": cat_in
                         }
                         st.session_state.expenses.append(entry_in)
-                        vibrate()
+                        trigger_feedback()
                         st.rerun()
 
         with t2:
@@ -257,7 +263,7 @@ if check_password():
         new_count = sum(check_list)
         if new_count > st.session_state.water_count:
              st.session_state.water_count = new_count
-             vibrate()
+             trigger_feedback()
              st.rerun()
 
         st.divider()
@@ -268,7 +274,7 @@ if check_password():
         st.text_area("Gratitude", placeholder="I am thankful for...")
         if st.button("Save Entry"):
             st.session_state.life_score += 5
-            vibrate()
+            trigger_feedback()
             st.success("Saved!")
 
     # === SETUP ===
@@ -277,5 +283,5 @@ if check_password():
         new_name = st.text_input("Change Name", value=st.session_state.user_name)
         if st.button("Update"): 
             st.session_state.user_name = new_name
-            vibrate()
+            trigger_feedback()
             st.rerun()
