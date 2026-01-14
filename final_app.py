@@ -138,4 +138,45 @@ if check_password():
         for i, habit in enumerate(st.session_state.habits):
             with st.container():
                 c1, c2, c3, c4 = st.columns([4, 2, 2, 1])
-                with c1: st.markdown(f"**{habit
+                # --- FIXED LINE BELOW ---
+                with c1: 
+                    st.markdown(f"**{habit['name']}**")
+                # ------------------------
+                with c2: st.markdown(f"<span class='streak-num'>{habit['streak']} 🔥</span>", unsafe_allow_html=True)
+                with c3:
+                    if st.button("➕ 1", key=f"h_inc_{i}"):
+                        st.session_state.habits[i]['streak'] += 1  
+                        st.session_state.life_score += 5
+                        vibrate()
+                        st.rerun()
+                with c4:
+                    if st.button("🗑️", key=f"h_del_{i}"):
+                        st.session_state.habits.pop(i)
+                        st.rerun()
+                st.markdown("---")
+
+    # === TAB 3: FINANCE ===
+    with tab3:
+        st.subheader("Wallet 💰")
+        clr = "#00FF7F" if st.session_state.total_savings >= 0 else "#FF4500"
+        st.markdown(f"<h1 style='text-align: center; color: {clr};'>PKR {st.session_state.total_savings}</h1>", unsafe_allow_html=True)
+        
+        t1, t2, t3 = st.tabs(["📝 Add", "📊 Charts", "📜 History"])
+        exp_cats = ["🍔 Food", "🏠 Rent", "🚗 Fuel", "🛍️ Shopping", "💡 Bills", "💊 Medical", "🎓 Fees", "🎉 Fun", "✈️ Travel", "🎁 Gifts", "💸 Debt", "📝 Other"]
+        inc_cats = ["💼 Salary", "💻 Freelance", "📈 Business", "🎁 Gift", "💰 Bonus", "📝 Other"]
+
+        with t1:
+            c1, c2 = st.columns(2)
+            with c1:
+                with st.form("ex_form"):
+                    st.write("**Expense 💸**")
+                    item = st.text_input("Item")
+                    cat = st.selectbox("Category", exp_cats)
+                    amt = st.number_input("Amount", min_value=0)
+                    if st.form_submit_button("Spend"):
+                        st.session_state.total_savings -= amt
+                        st.session_state.expenses.append({"Date": pk_time.strftime("%Y-%m-%d"), "Type": "Expense", "Item": item, "Amount": amt, "Category": cat})
+                        vibrate()
+                        st.rerun()
+            with c2:
+                with
