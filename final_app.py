@@ -43,11 +43,11 @@ def check_password():
         try:
             users = st.secrets["users"]
         except:
-            st.warning("⚠️ Setup Incomplete: Add [users] to Streamlit Secrets.")
+            st.warning("⚠️ Setup Incomplete: Add [users] to Secrets.")
             return True 
             
         with st.form("Login"):
-            st.markdown("<h2 style='text-align: center; color: #FF1493;'>🔐 Secure Login</h2>", unsafe_allow_html=True)
+            st.markdown("## 🔐 Secure Login")
             email = st.text_input("Email")
             password = st.text_input("Password", type="password")
             if st.form_submit_button("Unlock"):
@@ -71,10 +71,29 @@ if check_password():
     st.markdown("""
         <style>
         .stApp { background-color: #0E1117; color: #FAFAFA; }
-        .stButton > button { color: white !important; background-color: #FF1493 !important; border-radius: 12px; border: none; font-weight: bold; }
-        .stTextInput>div>div>input { background-color: #262730; color: white !important; border-radius: 10px; }
-        .big-score { font-size: 24px; font-weight: bold; color: #00FF7F; text-align: center; }
-        .streak-num { font-size: 26px; font-weight: bold; color: #00BFFF; }
+        .stButton>button { 
+            color: white !important; 
+            background-color: #FF1493 !important; 
+            border-radius: 12px; 
+            border: none; 
+            font-weight: bold; 
+        }
+        .stTextInput>div>div>input { 
+            background-color: #262730; 
+            color: white !important; 
+            border-radius: 10px; 
+        }
+        .big-score { 
+            font-size: 24px; 
+            font-weight: bold; 
+            color: #00FF7F; 
+            text-align: center; 
+        }
+        .streak-num { 
+            font-size: 26px; 
+            font-weight: bold; 
+            color: #00BFFF; 
+        }
         </style>
         """, unsafe_allow_html=True)
 
@@ -138,11 +157,10 @@ if check_password():
         for i, habit in enumerate(st.session_state.habits):
             with st.container():
                 c1, c2, c3, c4 = st.columns([4, 2, 2, 1])
-                # --- FIXED LINE BELOW ---
                 with c1: 
                     st.markdown(f"**{habit['name']}**")
-                # ------------------------
-                with c2: st.markdown(f"<span class='streak-num'>{habit['streak']} 🔥</span>", unsafe_allow_html=True)
+                with c2: 
+                    st.markdown(f"<span class='streak-num'>{habit['streak']} 🔥</span>", unsafe_allow_html=True)
                 with c3:
                     if st.button("➕ 1", key=f"h_inc_{i}"):
                         st.session_state.habits[i]['streak'] += 1  
@@ -175,8 +193,89 @@ if check_password():
                     amt = st.number_input("Amount", min_value=0)
                     if st.form_submit_button("Spend"):
                         st.session_state.total_savings -= amt
-                        st.session_state.expenses.append({"Date": pk_time.strftime("%Y-%m-%d"), "Type": "Expense", "Item": item, "Amount": amt, "Category": cat})
+                        # SAFE MULTI-LINE APPEND
+                        entry = {
+                            "Date": pk_time.strftime("%Y-%m-%d"), 
+                            "Type": "Expense", 
+                            "Item": item, 
+                            "Amount": amt, 
+                            "Category": cat
+                        }
+                        st.session_state.expenses.append(entry)
                         vibrate()
                         st.rerun()
             with c2:
-                with
+                with st.form("in_form"):
+                    st.write("**Income 💰**")
+                    src = st.text_input("Source")
+                    cat_in = st.selectbox("Category", inc_cats)
+                    amt_in = st.number_input("Amount", min_value=0)
+                    if st.form_submit_button("Deposit"):
+                        st.session_state.total_savings += amt_in
+                        # SAFE MULTI-LINE APPEND
+                        entry_in = {
+                            "Date": pk_time.strftime("%Y-%m-%d"), 
+                            "Type": "Income", 
+                            "Item": src, 
+                            "Amount": amt_in, 
+                            "Category": cat_in
+                        }
+                        st.session_state.expenses.append(entry_in)
+                        vibrate()
+                        st.rerun()
+
+        with t2:
+            if st.session_state.expenses:
+                df = pd.DataFrame(st.session_state.expenses)
+                c_a, c_b = st.columns(2)
+                with c_a:
+                    st.caption("Expenses")
+                    df_ex = df[df["Type"] == "Expense"]
+                    if not df_ex.empty:
+                        fig = px.pie(df_ex, values='Amount', names='Category', hole=0.5)
+                        st.plotly_chart(fig, use_container_width=True)
+                with c_b:
+                    st.caption("Income")
+                    df_in = df[df["Type"] == "Income"]
+                    if not df_in.empty:
+                        fig2 = px.pie(df_in, values='Amount', names='Category', hole=0.5)
+                        st.plotly_chart(fig2, use_container_width=True)
+            else: st.info("No data yet.")
+
+        with t3:
+            if st.session_state.expenses: 
+                st.dataframe(pd.DataFrame(st.session_state.expenses), use_container_width=True)
+
+    # === TAB 4: SELF CARE ===
+    with tab4:
+        st.subheader("Hydration 💧")
+        cols = st.columns(4); check_list = []
+        for i in range(4): check_list.append(cols[i].checkbox(f"{i+1}", value=st.session_state.water_count >= i+1))
+        cols2 = st.columns(4)
+        for i in range(4): check_list.append(cols2[i].checkbox(f"{i+5}", value=st.session_state.water_count >= i+5))
+        
+        new_count = sum(check_list)
+        if new_count > st.session_state.water_count:
+             st.session_state.water_count = new_count
+             vibrate()
+             st.rerun()
+
+        st.divider()
+        st.subheader("Journal 📝")
+        c1, c2 = st.columns(2)
+        c1.selectbox("Mood", ["Happy 🙂", "Calm 😌", "Stressed 😫", "Sad 😢"])
+        c2.selectbox("Sleep", ["8+ Hours 💤", "6-7 Hours", "4-5 Hours", "Less than 4"])
+        st.text_area("Gratitude", placeholder="I am thankful for...")
+        if st.button("Save Entry"):
+            st.session_state.life_score += 5
+            vibrate()
+            st.success("Saved!")
+
+    # === SETUP ===
+    with tab_setup:
+        st.subheader("Profile")
+        new_name = st.text_input("Change Name", value=st.session_state.user_name)
+        if st.button("Update"): 
+            st.session_state.user_name = new_name
+            vibrate()
+            st.rerun()
