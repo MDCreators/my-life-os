@@ -11,7 +11,7 @@ st.set_page_config(page_title="Life OS", page_icon="🌸", layout="centered")
 
 # --- 🎵 SOUND SYSTEM (DELAY FIX) ---
 def play_sound_and_wait(sound_type="pop"):
-    # 1. Vibration Script
+    # 1. Vibration
     vibrate_js = """<script>
     if (navigator.vibrate) { navigator.vibrate([200]); }
     </script>"""
@@ -26,7 +26,7 @@ def play_sound_and_wait(sound_type="pop"):
     }
     url = sounds.get(sound_type, sounds["pop"])
     
-    # 3. Audio Player (Hidden)
+    # 3. Audio Player
     sound_html = f"""
     <audio autoplay="true" style="display:none;">
     <source src="{url}" type="audio/mp3">
@@ -34,16 +34,10 @@ def play_sound_and_wait(sound_type="pop"):
     """
     st.markdown(sound_html, unsafe_allow_html=True)
     
-    # 4. WAIT FOR SOUND (Crucial Fix)
+    # 4. WAIT FOR SOUND
     time.sleep(1.2) 
 
-# --- SESSION STATE & REPAIR ---
-# Fix broken data structure automatically
-if 'goals' in st.session_state and st.session_state.goals:
-    if isinstance(st.session_state.goals[0], dict) and 'done' not in st.session_state.goals[0]:
-        del st.session_state['goals']
-
-# Initialize State
+# --- SESSION STATE ---
 if 'user_name' not in st.session_state: st.session_state.user_name = "User"
 if 'water_count' not in st.session_state: st.session_state.water_count = 0
 if 'total_savings' not in st.session_state: st.session_state.total_savings = 0 
@@ -54,17 +48,21 @@ if 'habits' not in st.session_state:
 if 'goals' not in st.session_state:
     st.session_state.goals = [{"text": "Goal 1", "done": False}, {"text": "Goal 2", "done": False}]
 
-# --- LOGIN SYSTEM ---
+# --- AUTO REPAIR ---
+if 'goals' in st.session_state and st.session_state.goals:
+    if isinstance(st.session_state.goals[0], dict) and 'done' not in st.session_state.goals[0]:
+        del st.session_state['goals']
+
+# --- LOGIN ---
 def check_password():
     if "authenticated" not in st.session_state:
-        try:
-            users = st.secrets["users"]
-        except:
-            st.warning("⚠️ Access Control Error: Add [users] to Secrets.")
+        try: users = st.secrets["users"]
+        except: 
+            st.warning("⚠️ Secrets Not Found")
             return False
-            
+        
         with st.form("Login"):
-            st.markdown("## 🔐 Paid Member Login")
+            st.markdown("## 🔐 Login")
             email = st.text_input("Email")
             password = st.text_input("Password", type="password")
             if st.form_submit_button("Login"):
@@ -72,8 +70,7 @@ def check_password():
                     st.session_state["authenticated"] = True
                     st.session_state["user_email"] = email
                     st.rerun()
-                else:
-                    st.error("❌ Invalid Login")
+                else: st.error("❌ Invalid Login")
         return False
     return True
 
@@ -99,9 +96,9 @@ if check_password():
     st.markdown(f"<div class='big-score'>🌟 Life Score: {st.session_state.life_score} XP</div>", unsafe_allow_html=True)
     
     # Tabs
-    t1, t2, t3, t4, t5 = st.tabs(["🏠 Hub", "✅ Habits", "💰 Wallet", "🌿 Care", "⚙️ Setup"])
+    t1, t2, t3, t4, t5 = st.tabs(["🏠 Hub", "✅ Habits", "💰 Finance", "🌿 Care", "⚙️ Setup"])
 
-    # 1. HUB (Goals)
+    # 1. HUB
     with t1:
         st.write("### Today's Focus 🎯")
         tg = len(st.session_state.goals)
@@ -111,13 +108,12 @@ if check_password():
         for i, goal in enumerate(st.session_state.goals):
             c1, c2 = st.columns([1, 8])
             with c1:
-                # Manual Check logic for Sound Delay
                 is_checked = st.checkbox("", key=f"g_{i}", value=goal['done'])
                 if is_checked != goal['done']:
                     st.session_state.goals[i]['done'] = is_checked
                     if is_checked:
                         st.session_state.life_score += 10
-                        play_sound_and_wait("win") # Sound bajay ga phir refresh hoga
+                        play_sound_and_wait("win")
                         st.balloons()
                     else:
                         st.session_state.life_score -= 10
@@ -152,26 +148,46 @@ if check_password():
                 st.session_state.habits.pop(i)
                 st.rerun()
 
-    # 3. WALLET (Charts)
+    # 3. FINANCE (FULL FEATURES BACK)
     with t3:
         st.metric("Savings", f"PKR {st.session_state.total_savings}")
-        ta, tb = st.tabs(["Transaction", "Analytics"])
+        ta, tb = st.tabs(["📝 Transaction", "📊 Analytics"])
         
+        # FULL CATEGORIES
+        exp_cats = ["🍔 Food", "🏠 Rent", "🚗 Fuel", "🛍️ Shopping", "💡 Bills", "💊 Medical", "🎓 Fees", "🎉 Fun", "✈️ Travel", "🎁 Gifts", "💸 Debt", "📝 Other"]
+        inc_cats = ["💼 Salary", "💻 Freelance", "📈 Business", "🎁 Gift", "💰 Bonus", "🤝 Side Hustle"]
+
         with ta:
-            with st.form("fin"):
-                item = st.text_input("Item")
-                amt = st.number_input("Amount", min_value=0)
-                cat = st.selectbox("Cat", ["Food", "Transport", "Shopping", "Bills", "Fees", "Salary", "Other"])
-                typ = st.selectbox("Type", ["Expense", "Income"])
-                if st.form_submit_button("Save"):
-                    if typ == "Expense": st.session_state.total_savings -= amt
-                    else: st.session_state.total_savings += amt
-                    
-                    st.session_state.expenses.append({
-                        "Date": str(pk_time.date()), "Item": item, "Amount": amt, "Type": typ, "Category": cat
-                    })
-                    play_sound_and_wait("cash")
-                    st.rerun()
+            c1, c2 = st.columns(2)
+            # EXPENSE FORM
+            with c1:
+                with st.form("ex_form"):
+                    st.write("**Expense 💸**")
+                    item = st.text_input("Item")
+                    cat = st.selectbox("Category", exp_cats)
+                    amt = st.number_input("Amount", min_value=0)
+                    if st.form_submit_button("Spend"):
+                        st.session_state.total_savings -= amt
+                        st.session_state.expenses.append({
+                            "Date": str(pk_time.date()), "Item": item, "Amount": amt, "Type": "Expense", "Category": cat
+                        })
+                        play_sound_and_wait("cash")
+                        st.rerun()
+            
+            # INCOME FORM
+            with c2:
+                with st.form("in_form"):
+                    st.write("**Income 💰**")
+                    src = st.text_input("Source")
+                    cat_in = st.selectbox("Category", inc_cats)
+                    amt_in = st.number_input("Amount", min_value=0)
+                    if st.form_submit_button("Deposit"):
+                        st.session_state.total_savings += amt_in
+                        st.session_state.expenses.append({
+                            "Date": str(pk_time.date()), "Item": src, "Amount": amt_in, "Type": "Income", "Category": cat_in
+                        })
+                        play_sound_and_wait("cash")
+                        st.rerun()
         
         with tb:
             if st.session_state.expenses:
