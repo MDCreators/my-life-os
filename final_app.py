@@ -43,14 +43,13 @@ def check_password():
             users = st.secrets["users"]
         except:
             st.warning("⚠️ Access Control Error: Add [users] to Secrets.")
-            # Temporary bypass hata diya hay taake security full rahay
+            # Temporary bypass for setup
             
         with st.form("Login"):
             st.markdown("## 🔐 Paid Member Login")
             email = st.text_input("Email")
             password = st.text_input("Password", type="password")
             if st.form_submit_button("Login"):
-                # Agar secrets na hon to crash se bachanay ke liye check
                 if 'users' in locals() and email in users and users[email] == password:
                     st.session_state["authenticated"] = True
                     st.session_state["user_email"] = email
@@ -110,6 +109,34 @@ if check_password():
         progress_val = completed_goals / total_goals if total_goals > 0 else 0
         st.progress(progress_val)
         st.caption(f"Progress: {int(progress_val*100)}% Completed")
-        # -------------------------
+        
+        # --- FIXED LINE HERE ---
+        for i, goal in enumerate(st.session_state.goals):
+            c1, c2 = st.columns([1, 8])
+            with c1:
+                if st.checkbox("", key=f"g_{i}", value=goal['done']):
+                    if not goal['done']:
+                        st.session_state.goals[i]['done'] = True
+                        st.session_state.life_score += 10
+                        trigger_feedback()
+                        st.balloons()
+                        st.rerun()
+                else:
+                    if goal['done']:
+                         st.session_state.goals[i]['done'] = False
+                         st.session_state.life_score -= 10
+                         st.rerun()
+            with c2:
+                st.session_state.goals[i]['text'] = st.text_input(f"G{i}", goal['text'], label_visibility="collapsed")
 
-        for i, goal in enumerate(st.session_state.goals
+        st.divider()
+        st.subheader("Hydration 💧")
+        progress = min(st.session_state.water_count / 8, 1.0)
+        st.progress(progress)
+        st.caption(f"{st.session_state.water_count} / 8 Glasses")
+
+    # === TAB 2: HABITS ===
+    with tab2:
+        st.subheader("Habit Tracker ✨")
+        c_in, c_btn = st.columns([3, 1])
+        with c_in: new_h = st.text_input("New Habit", label_visibility="collapsed
