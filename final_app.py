@@ -45,8 +45,14 @@ if 'expenses' not in st.session_state: st.session_state.expenses = []
 if 'life_score' not in st.session_state: st.session_state.life_score = 0
 if 'habits' not in st.session_state: 
     st.session_state.habits = [{"name": "Exercise", "streak": 0}, {"name": "Prayers", "streak": 0}]
+
+# --- FIX: 3 GOALS RESTORED ---
 if 'goals' not in st.session_state:
-    st.session_state.goals = [{"text": "Goal 1", "done": False}, {"text": "Goal 2", "done": False}]
+    st.session_state.goals = [
+        {"text": "Goal 1", "done": False}, 
+        {"text": "Goal 2", "done": False},
+        {"text": "Goal 3", "done": False}
+    ]
 
 # --- AUTO REPAIR ---
 if 'goals' in st.session_state and st.session_state.goals:
@@ -95,10 +101,19 @@ if check_password():
     st.markdown(f"<h1 style='text-align: center;'>Hi, {st.session_state.user_name}! 🌙</h1>", unsafe_allow_html=True)
     st.markdown(f"<div class='big-score'>🌟 Life Score: {st.session_state.life_score} XP</div>", unsafe_allow_html=True)
     
-    # Tabs
-    t1, t2, t3, t4, t5 = st.tabs(["🏠 Hub", "✅ Habits", "💰 Finance", "🌿 Care", "⚙️ Setup"])
+    # --- FIX: SETUP TAB MOVED TO START ---
+    t_set, t1, t2, t3, t4 = st.tabs(["⚙️ Setup", "🏠 Hub", "✅ Habits", "💰 Finance", "🌿 Care"])
 
-    # 1. HUB
+    # 1. SETUP (First Tab)
+    with t_set:
+        st.write("### Profile Settings")
+        nn = st.text_input("Name", value=st.session_state.user_name)
+        if st.button("Update Profile"): 
+            st.session_state.user_name = nn
+            play_sound_and_wait("pop")
+            st.rerun()
+
+    # 2. HUB
     with t1:
         st.write("### Today's Focus 🎯")
         tg = len(st.session_state.goals)
@@ -125,7 +140,7 @@ if check_password():
         st.write(f"### 💧 Water: {st.session_state.water_count}/8")
         st.progress(min(st.session_state.water_count / 8, 1.0))
 
-    # 2. HABITS
+    # 3. HABITS
     with t2:
         c_a, c_b = st.columns([3, 1])
         nh = c_a.text_input("New Habit", label_visibility="collapsed")
@@ -148,7 +163,7 @@ if check_password():
                 st.session_state.habits.pop(i)
                 st.rerun()
 
-    # 3. FINANCE (FULL FEATURES BACK)
+    # 4. FINANCE
     with t3:
         st.metric("Savings", f"PKR {st.session_state.total_savings}")
         ta, tb = st.tabs(["📝 Transaction", "📊 Analytics"])
@@ -159,7 +174,6 @@ if check_password():
 
         with ta:
             c1, c2 = st.columns(2)
-            # EXPENSE FORM
             with c1:
                 with st.form("ex_form"):
                     st.write("**Expense 💸**")
@@ -173,8 +187,6 @@ if check_password():
                         })
                         play_sound_and_wait("cash")
                         st.rerun()
-            
-            # INCOME FORM
             with c2:
                 with st.form("in_form"):
                     st.write("**Income 💰**")
@@ -209,7 +221,7 @@ if check_password():
             else:
                 st.info("No data yet.")
 
-    # 4. CARE
+    # 5. CARE
     with t4:
         st.write("### 💧 Hydration")
         cols = st.columns(4)
@@ -236,11 +248,3 @@ if check_password():
             st.session_state.life_score += 5
             play_sound_and_wait("tada")
             st.success("Saved! (+5 XP)")
-
-    # 5. SETUP
-    with t5:
-        nn = st.text_input("Name", value=st.session_state.user_name)
-        if st.button("Update Profile"): 
-            st.session_state.user_name = nn
-            play_sound_and_wait("pop")
-            st.rerun()
