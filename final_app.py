@@ -4,20 +4,20 @@ import plotly.express as px
 from datetime import datetime
 import pytz 
 import streamlit.components.v1 as components 
-import time # <--- Sound Fix ke liye zaroori
+import time
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Life OS", page_icon="🌸", layout="centered")
 
-# --- 🎵 SOUND SYSTEM (WITH DELAY FIX) ---
+# --- 🎵 SOUND SYSTEM (DELAY FIX) ---
 def play_sound_and_wait(sound_type="pop"):
-    # 1. Vibration
+    # 1. Vibration Script
     vibrate_js = """<script>
     if (navigator.vibrate) { navigator.vibrate([200]); }
     </script>"""
     components.html(vibrate_js, height=0, width=0)
     
-    # 2. Sound
+    # 2. Sound URLs
     sounds = {
         "win": "https://www.soundjay.com/misc/sounds/magic-chime-01.mp3",
         "cash": "https://www.soundjay.com/misc/sounds/coins-in-hand-2.mp3",
@@ -26,7 +26,7 @@ def play_sound_and_wait(sound_type="pop"):
     }
     url = sounds.get(sound_type, sounds["pop"])
     
-    # HTML Audio Player (Hidden)
+    # 3. Audio Player (Hidden)
     sound_html = f"""
     <audio autoplay="true" style="display:none;">
     <source src="{url}" type="audio/mp3">
@@ -34,10 +34,16 @@ def play_sound_and_wait(sound_type="pop"):
     """
     st.markdown(sound_html, unsafe_allow_html=True)
     
-    # --- MAGIC FIX: Wait for sound to play before refreshing ---
-    time.sleep(1.0) 
+    # 4. WAIT FOR SOUND (Crucial Fix)
+    time.sleep(1.2) 
 
-# --- SESSION STATE ---
+# --- SESSION STATE & REPAIR ---
+# Fix broken data structure automatically
+if 'goals' in st.session_state and st.session_state.goals:
+    if isinstance(st.session_state.goals[0], dict) and 'done' not in st.session_state.goals[0]:
+        del st.session_state['goals']
+
+# Initialize State
 if 'user_name' not in st.session_state: st.session_state.user_name = "User"
 if 'water_count' not in st.session_state: st.session_state.water_count = 0
 if 'total_savings' not in st.session_state: st.session_state.total_savings = 0 
@@ -48,21 +54,17 @@ if 'habits' not in st.session_state:
 if 'goals' not in st.session_state:
     st.session_state.goals = [{"text": "Goal 1", "done": False}, {"text": "Goal 2", "done": False}]
 
-# --- AUTO REPAIR (Fix old errors) ---
-if 'goals' in st.session_state and st.session_state.goals:
-    if isinstance(st.session_state.goals[0], dict) and 'done' not in st.session_state.goals[0]:
-        del st.session_state['goals']
-
-# --- LOGIN ---
+# --- LOGIN SYSTEM ---
 def check_password():
     if "authenticated" not in st.session_state:
-        try: users = st.secrets["users"]
-        except: 
-            st.warning("⚠️ Secrets Not Found")
+        try:
+            users = st.secrets["users"]
+        except:
+            st.warning("⚠️ Access Control Error: Add [users] to Secrets.")
             return False
-        
+            
         with st.form("Login"):
-            st.markdown("## 🔐 Login")
+            st.markdown("## 🔐 Paid Member Login")
             email = st.text_input("Email")
             password = st.text_input("Password", type="password")
             if st.form_submit_button("Login"):
@@ -70,7 +72,8 @@ def check_password():
                     st.session_state["authenticated"] = True
                     st.session_state["user_email"] = email
                     st.rerun()
-                else: st.error("❌ Invalid Login")
+                else:
+                    st.error("❌ Invalid Login")
         return False
     return True
 
@@ -81,7 +84,7 @@ if check_password():
     pk_tz = pytz.timezone('Asia/Karachi')
     pk_time = datetime.now(pk_tz)
     
-    # CSS (Dark Mode + Neon)
+    # CSS
     st.markdown("""
         <style>
         .stApp { background-color: #0E1117; color: white; }
@@ -95,10 +98,10 @@ if check_password():
     st.markdown(f"<h1 style='text-align: center;'>Hi, {st.session_state.user_name}! 🌙</h1>", unsafe_allow_html=True)
     st.markdown(f"<div class='big-score'>🌟 Life Score: {st.session_state.life_score} XP</div>", unsafe_allow_html=True)
     
-    # Tabs (Full Features)
+    # Tabs
     t1, t2, t3, t4, t5 = st.tabs(["🏠 Hub", "✅ Habits", "💰 Wallet", "🌿 Care", "⚙️ Setup"])
 
-    # 1. HUB (Goals + Progress)
+    # 1. HUB (Goals)
     with t1:
         st.write("### Today's Focus 🎯")
         tg = len(st.session_state.goals)
@@ -108,13 +111,13 @@ if check_password():
         for i, goal in enumerate(st.session_state.goals):
             c1, c2 = st.columns([1, 8])
             with c1:
-                # Manual Checkbox Logic for Sound
+                # Manual Check logic for Sound Delay
                 is_checked = st.checkbox("", key=f"g_{i}", value=goal['done'])
                 if is_checked != goal['done']:
                     st.session_state.goals[i]['done'] = is_checked
                     if is_checked:
                         st.session_state.life_score += 10
-                        play_sound_and_wait("win") # Wait karega phir rerun
+                        play_sound_and_wait("win") # Sound bajay ga phir refresh hoga
                         st.balloons()
                     else:
                         st.session_state.life_score -= 10
@@ -149,18 +152,18 @@ if check_password():
                 st.session_state.habits.pop(i)
                 st.rerun()
 
-    # 3. WALLET (Neon Charts Back)
+    # 3. WALLET (Charts)
     with t3:
         st.metric("Savings", f"PKR {st.session_state.total_savings}")
-        ta, tb = st.tabs(["📝 Add Transaction", "📊 Analytics"])
+        ta, tb = st.tabs(["Transaction", "Analytics"])
         
         with ta:
             with st.form("fin"):
                 item = st.text_input("Item")
                 amt = st.number_input("Amount", min_value=0)
-                cat = st.selectbox("Category", ["Food", "Transport", "Shopping", "Bills", "Fees", "Salary", "Other"])
+                cat = st.selectbox("Cat", ["Food", "Transport", "Shopping", "Bills", "Fees", "Salary", "Other"])
                 typ = st.selectbox("Type", ["Expense", "Income"])
-                if st.form_submit_button("Save Transaction"):
+                if st.form_submit_button("Save"):
                     if typ == "Expense": st.session_state.total_savings -= amt
                     else: st.session_state.total_savings += amt
                     
@@ -175,25 +178,24 @@ if check_password():
                 df = pd.DataFrame(st.session_state.expenses)
                 c_pie1, c_pie2 = st.columns(2)
                 with c_pie1:
-                    st.caption("Expense Breakdown")
+                    st.caption("Expense")
                     df_ex = df[df["Type"] == "Expense"]
                     if not df_ex.empty:
-                        fig = px.pie(df_ex, values='Amount', names='Category', hole=0.4, color_discrete_sequence=px.colors.qualitative.Bold)
+                        fig = px.pie(df_ex, values='Amount', names='Category', hole=0.4)
                         st.plotly_chart(fig, use_container_width=True)
                 with c_pie2:
-                    st.caption("Income Breakdown")
+                    st.caption("Income")
                     df_in = df[df["Type"] == "Income"]
                     if not df_in.empty:
-                        fig2 = px.pie(df_in, values='Amount', names='Category', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
+                        fig2 = px.pie(df_in, values='Amount', names='Category', hole=0.4)
                         st.plotly_chart(fig2, use_container_width=True)
-                
                 st.dataframe(df)
             else:
-                st.info("No transactions yet.")
+                st.info("No data yet.")
 
-    # 4. CARE (Full Features Restored)
+    # 4. CARE
     with t4:
-        st.write("### 💧 Hydration Tracker")
+        st.write("### 💧 Hydration")
         cols = st.columns(4)
         cl = []
         for i in range(4): cl.append(cols[i].checkbox(f"{i+1}", value=st.session_state.water_count >= i+1, key=f"w1_{i}"))
@@ -203,18 +205,18 @@ if check_password():
         nc = sum(cl)
         if nc != st.session_state.water_count:
              st.session_state.water_count = nc
-             if nc > st.session_state.water_count: # Only sound on increase
+             if nc > st.session_state.water_count:
                  play_sound_and_wait("pop")
              st.rerun()
 
         st.divider()
-        st.write("### 📝 Journal & Mood")
+        st.write("### 📝 Journal")
         c_m, c_s = st.columns(2)
         c_m.selectbox("Mood", ["Happy 🙂", "Calm 😌", "Stressed 😫", "Sad 😢", "Angry 😠"])
         c_s.selectbox("Sleep", ["8+ Hours 💤", "6-7 Hours", "4-5 Hours", "Less than 4"])
         
-        st.text_area("Gratitude (I am thankful for...)", placeholder="Write here...")
-        if st.button("Save Daily Log"):
+        st.text_area("Gratitude", placeholder="I am thankful for...")
+        if st.button("Save Log"):
             st.session_state.life_score += 5
             play_sound_and_wait("tada")
             st.success("Saved! (+5 XP)")
@@ -222,4 +224,7 @@ if check_password():
     # 5. SETUP
     with t5:
         nn = st.text_input("Name", value=st.session_state.user_name)
-        if
+        if st.button("Update Profile"): 
+            st.session_state.user_name = nn
+            play_sound_and_wait("pop")
+            st.rerun()
