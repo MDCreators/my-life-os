@@ -17,7 +17,7 @@ def play_sound_and_wait(sound_type="pop"):
     </script>"""
     components.html(vibrate_js, height=0, width=0)
     
-    # Sound
+    # Sound URLs
     sounds = {
         "win": "https://www.soundjay.com/misc/sounds/magic-chime-01.mp3",
         "cash": "https://www.soundjay.com/misc/sounds/coins-in-hand-2.mp3",
@@ -34,7 +34,7 @@ def play_sound_and_wait(sound_type="pop"):
     """
     st.markdown(sound_html, unsafe_allow_html=True)
     
-    # Wait
+    # Delay for Sound
     time.sleep(1.2) 
 
 # --- SESSION STATE ---
@@ -45,6 +45,8 @@ if 'expenses' not in st.session_state: st.session_state.expenses = []
 if 'life_score' not in st.session_state: st.session_state.life_score = 0
 if 'habits' not in st.session_state: 
     st.session_state.habits = [{"name": "Exercise", "streak": 0}, {"name": "Prayers", "streak": 0}]
+
+# --- 3 GOALS RESTORED ---
 if 'goals' not in st.session_state:
     st.session_state.goals = [
         {"text": "Goal 1", "done": False}, 
@@ -81,9 +83,11 @@ def check_password():
 # --- MAIN APP ---
 if check_password():
     
+    # Time
     pk_tz = pytz.timezone('Asia/Karachi')
     pk_time = datetime.now(pk_tz)
     
+    # CSS
     st.markdown("""
         <style>
         .stApp { background-color: #0E1117; color: white; }
@@ -92,9 +96,16 @@ if check_password():
         </style>
         """, unsafe_allow_html=True)
 
+    # --- RESTORED GREETING LOGIC ---
+    curr_hour = pk_time.hour
+    if 5 <= curr_hour < 12: greeting = "Good Morning"
+    elif 12 <= curr_hour < 17: greeting = "Good Afternoon"
+    elif 17 <= curr_hour < 21: greeting = "Good Evening"
+    else: greeting = "Good Night"
+
     # Header
     st.caption(f"🗓️ {pk_time.strftime('%d %B')} | ⏰ {pk_time.strftime('%I:%M %p')}")
-    st.markdown(f"<h1 style='text-align: center;'>Hi, {st.session_state.user_name}! 🌙</h1>", unsafe_allow_html=True)
+    st.markdown(f"<h1 style='text-align: center;'>{greeting}, {st.session_state.user_name}! 🌙</h1>", unsafe_allow_html=True)
     st.markdown(f"<div class='big-score'>🌟 Life Score: {st.session_state.life_score} XP</div>", unsafe_allow_html=True)
     
     # Tabs
@@ -159,17 +170,15 @@ if check_password():
                 st.session_state.habits.pop(i)
                 st.rerun()
 
-    # 4. FINANCE (FIXED COLORS & HISTORY)
+    # 4. FINANCE
     with t3:
         st.write("### Wallet 💰")
         
-        # --- COLOR LOGIC FIXED HERE ---
+        # Color Logic
         val = st.session_state.total_savings
-        color = "#00FF7F" if val >= 0 else "#FF4500" # Green if +, Red if -
+        color = "#00FF7F" if val >= 0 else "#FF4500" 
         st.markdown(f"<h1 style='text-align: center; color: {color};'>PKR {val}</h1>", unsafe_allow_html=True)
-        # ------------------------------
         
-        # 3 TABS WAPIS AA GAYE
         ta, tb, tc = st.tabs(["📝 Add", "📊 Charts", "📜 History"])
         
         exp_cats = ["🍔 Food", "🏠 Rent", "🚗 Fuel", "🛍️ Shopping", "💡 Bills", "💊 Medical", "🎓 Fees", "🎉 Fun", "✈️ Travel", "🎁 Gifts", "💸 Debt", "📝 Other"]
@@ -223,7 +232,6 @@ if check_password():
             else:
                 st.info("No data yet.")
 
-        # --- HISTORY TAB (RESTORED) ---
         with tc:
             if st.session_state.expenses:
                 st.dataframe(pd.DataFrame(st.session_state.expenses), use_container_width=True)
