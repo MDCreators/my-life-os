@@ -12,26 +12,31 @@ st.set_page_config(
     layout="centered"
 )
 
-# --- SOUND & VIBRATION ---
-def trigger_feedback():
-    vibrate_js = """
-    <script>
+# --- 🎵 DYNAMIC SOUND SYSTEM ---
+def play_sound(sound_type="pop"):
+    # 1. Vibration
+    vibrate_js = """<script>
     if (navigator.vibrate) { navigator.vibrate([200]); }
-    </script>
-    """
+    </script>"""
     components.html(vibrate_js, height=0, width=0)
-    st.audio(
-        "https://www.soundjay.com/buttons/sounds/button-3.mp3", 
-        format="audio/mp3", 
-        autoplay=True
-    )
+    
+    # 2. Fun Sounds (URLs)
+    sounds = {
+        "win": "https://www.soundjay.com/misc/sounds/magic-chime-01.mp3",   # Goal Done
+        "cash": "https://www.soundjay.com/misc/sounds/coins-in-hand-2.mp3", # Finance
+        "pop": "https://www.soundjay.com/buttons/sounds/button-09.mp3",     # Habits/Water
+        "tada": "https://www.soundjay.com/human/sounds/applause-01.mp3"     # Level Up
+    }
+    
+    # Play Audio
+    audio_url = sounds.get(sound_type, sounds["pop"])
+    st.audio(audio_url, format="audio/mp3", autoplay=True)
 
-# --- 2. AUTO-REPAIR SESSION STATE (FIX FOR ERROR) ---
-# Ye check karega ke agar purana data (d/t) hay to usay delete kar de
+# --- 2. AUTO-REPAIR STATE ---
 if 'goals' in st.session_state and st.session_state.goals:
     if 'done' not in st.session_state.goals[0]:
-        del st.session_state['goals'] # Purana data delete
-        del st.session_state['habits'] # Purana habits bhi delete
+        del st.session_state['goals'] 
+        del st.session_state['habits'] 
 
 # --- 3. INITIALIZE STATE ---
 if 'user_name' not in st.session_state: 
@@ -109,11 +114,6 @@ if check_password():
             color: #00FF7F; 
             text-align: center; 
         }
-        .streak-num { 
-            font-size: 26px; 
-            font-weight: bold; 
-            color: #00BFFF; 
-        }
         audio { display: none; }
         </style>
         """, unsafe_allow_html=True)
@@ -121,7 +121,7 @@ if check_password():
     # Header
     dt_str = pk_time.strftime("%A, %d %B")
     tm_str = pk_time.strftime("%I:%M %p")
-    st.markdown(f"<p style='text-align: center; color: #888;'>🗓️ {dt_str} | ⏰ {tm_str} (PKT)</p>", unsafe_allow_html=True)
+    st.caption(f"🗓️ {dt_str} | ⏰ {tm_str} (PKT)")
 
     curr_hour = pk_time.hour
     if 5 <= curr_hour < 12: greeting = "Good Morning"
@@ -130,7 +130,7 @@ if check_password():
     else: greeting = "Good Night"
 
     st.markdown(f"<h1 style='text-align: center;'>{greeting}, {st.session_state.user_name}! 🌙</h1>", unsafe_allow_html=True)
-    st.markdown(f"<div class='big-score'>🌟 Life Score: {st.session_state.life_score} XP</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='big-score'>🌟 XP: {st.session_state.life_score}</div>", unsafe_allow_html=True)
     
     # Tabs
     tab_setup, tab1, tab2, tab3, tab4 = st.tabs(["⚙️ Setup", "🏠 Main Hub", "✅ Habits", "💰 Finance", "🌿 Self-Care"])
@@ -140,15 +140,13 @@ if check_password():
         st.divider()
         st.subheader("Today's Focus 🎯")
         
-        # --- GOAL PROGRESS BAR ---
+        # Progress Bar
         total_goals = len(st.session_state.goals)
-        # Error fix logic included here indirectly
         completed_goals = sum(1 for g in st.session_state.goals if g.get('done', False))
-        
         progress_val = completed_goals / total_goals if total_goals > 0 else 0
         st.progress(progress_val)
-        st.caption(f"Progress: {int(progress_val*100)}% Completed")
         
+        # Goals List
         for i, goal in enumerate(st.session_state.goals):
             c1, c2 = st.columns([1, 8])
             with c1:
@@ -156,7 +154,7 @@ if check_password():
                     if not goal['done']:
                         st.session_state.goals[i]['done'] = True
                         st.session_state.life_score += 10
-                        trigger_feedback()
+                        play_sound("win") # <--- WIN SOUND
                         st.balloons()
                         st.rerun()
                 else:
@@ -182,27 +180,24 @@ if check_password():
         st.subheader("Habit Tracker ✨")
         c_in, c_btn = st.columns([3, 1])
         with c_in: 
-            new_h = st.text_input(
-                "New Habit", 
-                label_visibility="collapsed"
-            )
+            new_h = st.text_input("New Habit", label_visibility="collapsed")
         with c_btn: 
             if st.button("➕"):
                 if new_h:
                     st.session_state.habits.append({"name": new_h, "streak": 0})
-                    trigger_feedback()
+                    play_sound("pop") # <--- POP SOUND
                     st.rerun()
         st.write("---")
         for i, habit in enumerate(st.session_state.habits):
             with st.container():
                 c1, c2, c3, c4 = st.columns([4, 2, 2, 1])
                 with c1: st.markdown(f"**{habit['name']}**")
-                with c2: st.markdown(f"<span class='streak-num'>{habit['streak']} 🔥</span>", unsafe_allow_html=True)
+                with c2: st.markdown(f"🔥 {habit['streak']}")
                 with c3:
                     if st.button("➕ 1", key=f"h_inc_{i}"):
                         st.session_state.habits[i]['streak'] += 1  
                         st.session_state.life_score += 5
-                        trigger_feedback()
+                        play_sound("pop") # <--- POP SOUND
                         st.rerun()
                 with c4:
                     if st.button("🗑️", key=f"h_del_{i}"):
@@ -238,7 +233,7 @@ if check_password():
                             "Category": cat
                         }
                         st.session_state.expenses.append(entry)
-                        trigger_feedback()
+                        play_sound("cash") # <--- CASH SOUND
                         st.rerun()
             with c2:
                 with st.form("in_form"):
@@ -256,7 +251,7 @@ if check_password():
                             "Category": cat_in
                         }
                         st.session_state.expenses.append(entry_in)
-                        trigger_feedback()
+                        play_sound("cash") # <--- CASH SOUND
                         st.rerun()
 
         with t2:
@@ -267,32 +262,19 @@ if check_password():
                     st.caption("Expenses")
                     df_ex = df[df["Type"] == "Expense"]
                     if not df_ex.empty:
-                        fig = px.pie(
-                            df_ex, 
-                            values='Amount', 
-                            names='Category', 
-                            hole=0.5
-                        )
+                        fig = px.pie(df_ex, values='Amount', names='Category', hole=0.5)
                         st.plotly_chart(fig, use_container_width=True)
                 with c_b:
                     st.caption("Income")
                     df_in = df[df["Type"] == "Income"]
                     if not df_in.empty:
-                        fig2 = px.pie(
-                            df_in, 
-                            values='Amount', 
-                            names='Category', 
-                            hole=0.5
-                        )
+                        fig2 = px.pie(df_in, values='Amount', names='Category', hole=0.5)
                         st.plotly_chart(fig2, use_container_width=True)
             else: st.info("No data yet.")
 
         with t3:
             if st.session_state.expenses: 
-                st.dataframe(
-                    pd.DataFrame(st.session_state.expenses), 
-                    use_container_width=True
-                )
+                st.dataframe(pd.DataFrame(st.session_state.expenses), use_container_width=True)
 
     # === TAB 4: SELF CARE ===
     with tab4:
@@ -307,7 +289,7 @@ if check_password():
         new_count = sum(check_list)
         if new_count > st.session_state.water_count:
              st.session_state.water_count = new_count
-             trigger_feedback()
+             play_sound("pop") # <--- WATER SOUND
              st.rerun()
 
         st.divider()
@@ -319,17 +301,14 @@ if check_password():
         st.text_area("Gratitude", placeholder="I am thankful for...")
         if st.button("Save Entry"):
             st.session_state.life_score += 5
-            trigger_feedback()
+            play_sound("tada") # <--- TADA SOUND
             st.success("Saved! (+5 XP)")
 
     # === SETUP ===
     with tab_setup:
         st.subheader("Profile")
-        new_name = st.text_input(
-            "Change Name", 
-            value=st.session_state.user_name
-        )
+        new_name = st.text_input("Change Name", value=st.session_state.user_name)
         if st.button("Update"): 
             st.session_state.user_name = new_name
-            trigger_feedback()
+            play_sound("pop")
             st.rerun()
