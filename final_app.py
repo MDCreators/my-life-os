@@ -12,10 +12,22 @@ st.set_page_config(
     page_title="Life OS Pro", 
     page_icon="⚡", 
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# --- 🛠️ AUTO-FIXER ---
+# --- 2. EFFECT MEMORY (THE FIX) ---
+if 'run_effect' not in st.session_state:
+    st.session_state.run_effect = None
+
+# Check if an effect is pending from the last run
+if st.session_state.run_effect == "balloons":
+    st.balloons()
+    st.session_state.run_effect = None
+elif st.session_state.run_effect == "snow":
+    st.snow()
+    st.session_state.run_effect = None
+
+# --- 3. AUTO-FIXER ---
 if 'goals' in st.session_state:
     fixed_goals = []
     for g in st.session_state.goals:
@@ -32,7 +44,7 @@ if 'habits' in st.session_state:
         fixed_habits.append({'name': n, 'streak': s})
     st.session_state.habits = fixed_habits
 
-# --- 🎵 SOUND SYSTEM ---
+# --- 4. SOUND SYSTEM ---
 def play_sound_and_wait(sound_type="pop"):
     vibrate_js = """<script>if(navigator.vibrate){navigator.vibrate([200]);}</script>"""
     components.html(vibrate_js, height=0, width=0)
@@ -50,9 +62,9 @@ def play_sound_and_wait(sound_type="pop"):
     <source src="{url}" type="audio/mp3">
     </audio>
     """, unsafe_allow_html=True)
-    time.sleep(0.8)
+    time.sleep(0.8) # Sound ko bajnay ka time dein
 
-# --- STATE MANAGEMENT ---
+# --- 5. STATE MANAGEMENT ---
 if 'user_name' not in st.session_state: st.session_state.user_name = "Boss"
 if 'xp' not in st.session_state: st.session_state.xp = 0
 if 'level' not in st.session_state: st.session_state.level = 1
@@ -71,10 +83,10 @@ def check_level_up():
         st.session_state.level += 1
         st.session_state.xp = 0 
         play_sound_and_wait("levelup")
-        st.balloons()
+        st.session_state.run_effect = "balloons" # Level up par balloons
         st.toast(f"🎉 LEVEL UP! You are now Level {st.session_state.level}!", icon="🆙")
 
-# --- LOGIN ---
+# --- 6. LOGIN ---
 def check_auth():
     if "auth" not in st.session_state:
         try: users = st.secrets["users"]
@@ -96,10 +108,10 @@ def check_auth():
         return False
     return True
 
-# --- APP ---
+# --- 7. MAIN APP ---
 if check_auth():
     
-    # CSS STYLING
+    # CSS Styling
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;800&display=swap');
@@ -188,7 +200,9 @@ if check_auth():
                         st.session_state.xp += 20
                         check_level_up()
                         play_sound_and_wait("win")
-                        st.toast("Goal Completed! +20 XP", icon="🔥") # Satisfying Popup
+                        # FLAG SET FOR NEXT RELOAD
+                        st.session_state.run_effect = "balloons" 
+                        st.toast("Goal Completed! +20 XP", icon="🎈")
                         st.rerun()
             with c2:
                 st.session_state.goals[i]['text'] = st.text_input(f"g_t{i}", g['text'], label_visibility="collapsed")
@@ -232,6 +246,8 @@ if check_auth():
                     st.session_state.xp += 10
                     check_level_up()
                     play_sound_and_wait("cash")
+                    # FLAG SET FOR SNOW (Satisfying for money too)
+                    st.session_state.run_effect = "snow"
                     st.toast("Transaction Saved!", icon="💰")
                     st.rerun()
         
@@ -252,7 +268,7 @@ if check_auth():
 
     # === HABITS ===
     elif menu == "💪 Habits":
-        st.title("Habits & Water 🌱")
+        st.title("Habits & Health 🌱")
         
         st.markdown("<div class='card'><h4>💧 Hydration</h4>", unsafe_allow_html=True)
         st.progress(min(st.session_state.water / 8, 1.0))
@@ -262,6 +278,7 @@ if check_auth():
             if st.session_state.water < 8:
                 st.session_state.water += 1
                 play_sound_and_wait("pop")
+                st.session_state.run_effect = "snow" # Water drops -> Snow effect
                 st.rerun()
         if c2.button("➖ Undo"):
             if st.session_state.water > 0:
@@ -286,15 +303,16 @@ if check_auth():
                 st.session_state.xp += 15
                 check_level_up()
                 play_sound_and_wait("pop")
-                st.balloons() # Satisfying Visual
-                st.toast("Streak Increased! Keep going!", icon="🔥")
+                # FLAG SET FOR SNOW
+                st.session_state.run_effect = "snow"
+                st.toast("Streak Increased!", icon="❄️")
                 st.rerun()
             if c_del.button("x", key=f"del_h{i}"):
                 st.session_state.habits.pop(i)
                 st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # === JOURNAL (RESTORED) ===
+    # === JOURNAL ===
     elif menu == "📝 Journal":
         st.title("Daily Journal 📔")
         
@@ -311,8 +329,10 @@ if check_auth():
             st.session_state.xp += 5
             check_level_up()
             play_sound_and_wait("win")
-            st.toast("Journal Saved!", icon="📖")
+            # FLAG SET FOR BALLOONS
+            st.session_state.run_effect = "balloons"
             st.success("Entry Saved!")
+            st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
         
         if st.session_state.journal_logs:
