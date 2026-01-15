@@ -15,24 +15,41 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 🛠️ AUTO-FIXER ---
-if 'goals' in st.session_state:
-    fixed_goals = []
-    for g in st.session_state.goals:
-        t = g.get('txt', g.get('text', 'New Goal'))
-        d = g.get('done', False)
-        fixed_goals.append({'text': t, 'done': d})
-    st.session_state.goals = fixed_goals
+# --- 2. STATE INITIALIZATION (CRITICAL FIX) ---
+if 'user_name' not in st.session_state: st.session_state.user_name = "Boss"
+if 'xp' not in st.session_state: st.session_state.xp = 0
+if 'level' not in st.session_state: st.session_state.level = 1
+if 'balance' not in st.session_state: st.session_state.balance = 0
+if 'water' not in st.session_state: st.session_state.water = 0
+if 'transactions' not in st.session_state: st.session_state.transactions = []
+if 'currency' not in st.session_state: st.session_state.currency = "PKR"
+if 'timezone' not in st.session_state: st.session_state.timezone = "Asia/Karachi"
+if 'notifications' not in st.session_state: st.session_state.notifications = True
 
-if 'habits' in st.session_state:
-    fixed_habits = []
-    for h in st.session_state.habits:
-        n = h.get('name', 'Habit')
-        s = h.get('s', h.get('streak', 0))
-        fixed_habits.append({'name': n, 'streak': s})
-    st.session_state.habits = fixed_habits
+# --- FIX: Initialize Goals & Habits ---
+if 'goals' not in st.session_state: 
+    st.session_state.goals = [{"text": "Deep Work", "done": False}, {"text": "Read Book", "done": False}]
+if 'habits' not in st.session_state: 
+    st.session_state.habits = [{"name": "Exercise", "streak": 0}]
 
-# --- 🎵 SOUND SYSTEM ---
+# --- 3. AUTO-FIXER (Updates old data format) ---
+# Goals Fix
+fixed_goals = []
+for g in st.session_state.goals:
+    t = g.get('txt', g.get('text', 'New Goal'))
+    d = g.get('done', False)
+    fixed_goals.append({'text': t, 'done': d})
+st.session_state.goals = fixed_goals
+
+# Habits Fix
+fixed_habits = []
+for h in st.session_state.habits:
+    n = h.get('name', 'Habit')
+    s = h.get('s', h.get('streak', 0))
+    fixed_habits.append({'name': n, 'streak': s})
+st.session_state.habits = fixed_habits
+
+# --- 4. SOUND SYSTEM ---
 def play_sound_and_wait(sound_type="pop"):
     vibrate_js = """<script>if(navigator.vibrate){navigator.vibrate([200]);}</script>"""
     components.html(vibrate_js, height=0, width=0)
@@ -52,17 +69,6 @@ def play_sound_and_wait(sound_type="pop"):
     """, unsafe_allow_html=True)
     time.sleep(0.8)
 
-# --- STATE MANAGEMENT ---
-if 'user_name' not in st.session_state: st.session_state.user_name = "Boss"
-if 'xp' not in st.session_state: st.session_state.xp = 0
-if 'level' not in st.session_state: st.session_state.level = 1
-if 'balance' not in st.session_state: st.session_state.balance = 0
-if 'water' not in st.session_state: st.session_state.water = 0
-if 'transactions' not in st.session_state: st.session_state.transactions = []
-if 'currency' not in st.session_state: st.session_state.currency = "PKR"
-if 'timezone' not in st.session_state: st.session_state.timezone = "Asia/Karachi"
-if 'notifications' not in st.session_state: st.session_state.notifications = True
-
 # --- LEVEL UP ---
 def check_level_up():
     req_xp = st.session_state.level * 100 
@@ -72,7 +78,7 @@ def check_level_up():
         play_sound_and_wait("levelup")
         st.balloons()
 
-# --- LOGIN ---
+# --- 5. LOGIN ---
 def check_auth():
     if "auth" not in st.session_state:
         try: users = st.secrets["users"]
@@ -94,10 +100,10 @@ def check_auth():
         return False
     return True
 
-# --- APP ---
+# --- 6. MAIN APP ---
 if check_auth():
     
-    # 🌟 NEW VISUALS: GOOGLE FONTS & STYLING
+    # 🌟 GOOGLE FONTS & STYLING
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;800&display=swap');
@@ -201,7 +207,7 @@ if check_auth():
                     st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # === WALLET (FIXED INCOME CATEGORIES) ===
+    # === WALLET (FINANCE) ===
     elif menu == "💰 Wallet":
         curr = st.session_state.currency
         val = st.session_state.balance
@@ -218,13 +224,10 @@ if check_auth():
         with tab1:
             st.write("#### New Entry")
             
-            # --- CRITICAL FIX: TYPE SELECTION OUTSIDE FORM ---
-            # Ye form se bahar hay, is liye click karte hi page refresh hoga
-            # aur sahi categories load ho jayengi.
+            # --- TYPE SELECTION OUTSIDE FORM ---
             typ = st.radio("Transaction Type", ["Expense 🔴", "Income 🟢"], horizontal=True)
             
             with st.form("money"):
-                # Dynamic Category Selection
                 if "Income" in typ:
                     cat = st.selectbox("Select Income Source", income_cats)
                 else:
