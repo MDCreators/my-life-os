@@ -8,23 +8,17 @@ import streamlit.components.v1 as components
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Life OS", page_icon="🌸", layout="centered")
 
-# --- SOUND & VIBRATION FUNCTION ---
+# --- SOUND & VIBRATION ---
 def trigger_feedback():
-    # 1. VIBRATION (JavaScript Attempt)
-    # Hum browser ko 'User Gesture' dikhane ki koshish kar rahay hain
+    # Vibration Script
     vibrate_js = """
     <script>
     navigator.vibrate = navigator.vibrate || navigator.webkitVibrate || navigator.mozVibrate || navigator.msVibrate;
-    if (navigator.vibrate) {
-        navigator.vibrate([200]);
-    }
+    if (navigator.vibrate) { navigator.vibrate([200]); }
     </script>
     """
     components.html(vibrate_js, height=0, width=0)
-    
-    # 2. SOUND (Streamlit Native Autoplay)
-    # Ye invisible player hai jo automatically chalay ga
-    # Short "Ding" Sound
+    # Sound
     st.audio("https://www.soundjay.com/buttons/sounds/button-3.mp3", format="audio/mp3", autoplay=True)
 
 # --- SESSION STATE ---
@@ -34,10 +28,7 @@ if 'total_savings' not in st.session_state: st.session_state.total_savings = 0
 if 'expenses' not in st.session_state: st.session_state.expenses = []
 if 'life_score' not in st.session_state: st.session_state.life_score = 0
 if 'habits' not in st.session_state: 
-    st.session_state.habits = [
-        {"name": "Exercise", "streak": 0}, 
-        {"name": "Prayers", "streak": 0}
-    ]
+    st.session_state.habits = [{"name": "Exercise", "streak": 0}, {"name": "Prayers", "streak": 0}]
 if 'goals' not in st.session_state:
     st.session_state.goals = [
         {"text": "Goal 1", "done": False},
@@ -51,20 +42,20 @@ def check_password():
         try:
             users = st.secrets["users"]
         except:
-            st.warning("⚠️ Add [users] to Secrets.")
+            st.warning("⚠️ Access Control Error: Add [users] to Secrets.")
             return True 
             
         with st.form("Login"):
-            st.markdown("## 🔐 Secure Login")
+            st.markdown("## 🔐 Paid Member Login")
             email = st.text_input("Email")
             password = st.text_input("Password", type="password")
-            if st.form_submit_button("Unlock"):
+            if st.form_submit_button("Login"):
                 if email in users and users[email] == password:
                     st.session_state["authenticated"] = True
                     st.session_state["user_email"] = email
                     st.rerun()
                 else:
-                    st.error("❌ Access Denied")
+                    st.error("❌ Email ya Password ghalat hay.")
         return False
     return True
 
@@ -83,7 +74,6 @@ if check_password():
         .stTextInput>div>div>input { background-color: #262730; color: white !important; border-radius: 10px; }
         .big-score { font-size: 24px; font-weight: bold; color: #00FF7F; text-align: center; }
         .streak-num { font-size: 26px; font-weight: bold; color: #00BFFF; }
-        /* Hide Audio Player */
         audio { display: none; }
         </style>
         """, unsafe_allow_html=True)
@@ -109,6 +99,17 @@ if check_password():
     with tab1:
         st.divider()
         st.subheader("Today's Focus 🎯")
+        
+        # --- NEW: GOAL PROGRESS BAR ---
+        total_goals = len(st.session_state.goals)
+        completed_goals = sum(1 for g in st.session_state.goals if g['done'])
+        
+        # Prevent division by zero
+        progress_val = completed_goals / total_goals if total_goals > 0 else 0
+        st.progress(progress_val)
+        st.caption(f"Progress: {completed_goals}/{total_goals} Completed")
+        # -----------------------------
+
         for i, goal in enumerate(st.session_state.goals):
             c1, c2 = st.columns([1, 8])
             with c1:
@@ -116,7 +117,7 @@ if check_password():
                     if not goal['done']:
                         st.session_state.goals[i]['done'] = True
                         st.session_state.life_score += 10
-                        trigger_feedback() # SOUND HERE
+                        trigger_feedback()
                         st.balloons()
                         st.rerun()
                 else:
@@ -142,7 +143,7 @@ if check_password():
             if st.button("➕"):
                 if new_h:
                     st.session_state.habits.append({"name": new_h, "streak": 0})
-                    trigger_feedback() # SOUND HERE
+                    trigger_feedback()
                     st.rerun()
         st.write("---")
         for i, habit in enumerate(st.session_state.habits):
@@ -154,7 +155,7 @@ if check_password():
                     if st.button("➕ 1", key=f"h_inc_{i}"):
                         st.session_state.habits[i]['streak'] += 1  
                         st.session_state.life_score += 5
-                        trigger_feedback() # SOUND HERE
+                        trigger_feedback()
                         st.rerun()
                 with c4:
                     if st.button("🗑️", key=f"h_del_{i}"):
@@ -169,8 +170,8 @@ if check_password():
         st.markdown(f"<h1 style='text-align: center; color: {clr};'>PKR {st.session_state.total_savings}</h1>", unsafe_allow_html=True)
         
         t1, t2, t3 = st.tabs(["📝 Add", "📊 Charts", "📜 History"])
-        exp_cats = ["🍔 Food", "🏠 Rent", "🚗 Fuel", "🛍️ Shopping", "💡 Bills", "💊 Medical", "🎓 Fees", "🎉 Fun", "✈️ Travel", "🎁 Gifts", "💸 Debt", "📝 Other"]
-        inc_cats = ["💼 Salary", "💻 Freelance", "📈 Business", "🎁 Gift", "💰 Bonus", "📝 Other"]
+        exp_cats = ["🍔 Food", "🏠 Rent", "🚗 Fuel", "🛍️ Shopping", "💡 Bills", "💊 Medical", "🎓 Fees", "🎉 Fun", "📝 Other"]
+        inc_cats = ["💼 Salary", "💻 Freelance", "📈 Business", "🎁 Gift", "💰 Bonus"]
 
         with t1:
             c1, c2 = st.columns(2)
@@ -184,7 +185,7 @@ if check_password():
                         st.session_state.total_savings -= amt
                         entry = {"Date": pk_time.strftime("%Y-%m-%d"), "Type": "Expense", "Item": item, "Amount": amt, "Category": cat}
                         st.session_state.expenses.append(entry)
-                        trigger_feedback() # SOUND HERE
+                        trigger_feedback()
                         st.rerun()
             with c2:
                 with st.form("in_form"):
@@ -196,7 +197,7 @@ if check_password():
                         st.session_state.total_savings += amt_in
                         entry_in = {"Date": pk_time.strftime("%Y-%m-%d"), "Type": "Income", "Item": src, "Amount": amt_in, "Category": cat_in}
                         st.session_state.expenses.append(entry_in)
-                        trigger_feedback() # SOUND HERE
+                        trigger_feedback()
                         st.rerun()
 
         with t2:
@@ -228,23 +229,11 @@ if check_password():
         for i in range(4): check_list.append(cols[i].checkbox(f"{i+1}", value=st.session_state.water_count >= i+1))
         cols2 = st.columns(4)
         for i in range(4): check_list.append(cols2[i].checkbox(f"{i+5}", value=st.session_state.water_count >= i+5))
-        
         new_count = sum(check_list)
         if new_count > st.session_state.water_count:
              st.session_state.water_count = new_count
-             trigger_feedback() # SOUND HERE
+             trigger_feedback()
              st.rerun()
-
-        st.divider()
-        st.subheader("Journal 📝")
-        c1, c2 = st.columns(2)
-        c1.selectbox("Mood", ["Happy 🙂", "Calm 😌", "Stressed 😫", "Sad 😢"])
-        c2.selectbox("Sleep", ["8+ Hours 💤", "6-7 Hours", "4-5 Hours", "Less than 4"])
-        st.text_area("Gratitude", placeholder="I am thankful for...")
-        if st.button("Save Entry"):
-            st.session_state.life_score += 5
-            trigger_feedback() # SOUND HERE
-            st.success("Saved!")
 
     # === SETUP ===
     with tab_setup:
@@ -252,5 +241,5 @@ if check_password():
         new_name = st.text_input("Change Name", value=st.session_state.user_name)
         if st.button("Update"): 
             st.session_state.user_name = new_name
-            trigger_feedback() # SOUND HERE
+            trigger_feedback()
             st.rerun()
