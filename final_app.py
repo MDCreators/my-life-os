@@ -6,6 +6,7 @@ import pytz
 import streamlit.components.v1 as components 
 import time
 import random
+import os
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(
@@ -15,11 +16,54 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. EFFECT MEMORY (THE FIX) ---
-if 'run_effect' not in st.session_state:
-    st.session_state.run_effect = None
+# --- 2. PERSISTENT LOGIN SYSTEM (THE MAGIC) ---
+AUTH_FILE = "auth_state.txt"
 
-# Check if an effect is pending from the last run
+def is_permanently_logged_in():
+    """Checks if the user has logged in before on this machine."""
+    if os.path.exists(AUTH_FILE):
+        with open(AUTH_FILE, "r") as f:
+            return f.read().strip() == "LOGGED_IN"
+    return False
+
+def set_permanent_login():
+    """Saves the login state permanently."""
+    with open(AUTH_FILE, "w") as f:
+        f.write("LOGGED_IN")
+
+def factory_reset_pro():
+    """Wipes everything including the login state."""
+    if os.path.exists(AUTH_FILE):
+        os.remove(AUTH_FILE) # Delete the login memory
+    st.session_state.clear()
+    st.rerun()
+
+# --- 3. CRASH PROTECTION ---
+try:
+    if 'goals' not in st.session_state or not isinstance(st.session_state.goals, list):
+        st.session_state.goals = [{"text": "Deep Work", "done": False}]
+    if st.session_state.goals and not isinstance(st.session_state.goals[0], dict):
+        st.session_state.goals = [{"text": "Deep Work", "done": False}]
+    if 'habits' not in st.session_state or not isinstance(st.session_state.habits, list):
+        st.session_state.habits = [{"name": "Exercise", "streak": 0}]
+except Exception:
+    st.session_state.goals = [{"text": "Deep Work", "done": False}]
+    st.session_state.habits = [{"name": "Exercise", "streak": 0}]
+
+# --- 4. STATE INITIALIZATION ---
+if 'user_name' not in st.session_state: st.session_state.user_name = "Boss"
+if 'xp' not in st.session_state: st.session_state.xp = 0
+if 'level' not in st.session_state: st.session_state.level = 1
+if 'balance' not in st.session_state: st.session_state.balance = 0
+if 'water' not in st.session_state: st.session_state.water = 0
+if 'transactions' not in st.session_state: st.session_state.transactions = []
+if 'currency' not in st.session_state: st.session_state.currency = "PKR"
+if 'timezone' not in st.session_state: st.session_state.timezone = "Asia/Karachi"
+if 'notifications' not in st.session_state: st.session_state.notifications = True
+if 'journal_logs' not in st.session_state: st.session_state.journal_logs = []
+if 'run_effect' not in st.session_state: st.session_state.run_effect = None
+
+# --- 5. EFFECT RUNNER ---
 if st.session_state.run_effect == "balloons":
     st.balloons()
     st.session_state.run_effect = None
@@ -27,24 +71,7 @@ elif st.session_state.run_effect == "snow":
     st.snow()
     st.session_state.run_effect = None
 
-# --- 3. AUTO-FIXER ---
-if 'goals' in st.session_state:
-    fixed_goals = []
-    for g in st.session_state.goals:
-        t = g.get('txt', g.get('text', 'New Goal'))
-        d = g.get('done', False)
-        fixed_goals.append({'text': t, 'done': d})
-    st.session_state.goals = fixed_goals
-
-if 'habits' in st.session_state:
-    fixed_habits = []
-    for h in st.session_state.habits:
-        n = h.get('name', 'Habit')
-        s = h.get('s', h.get('streak', 0))
-        fixed_habits.append({'name': n, 'streak': s})
-    st.session_state.habits = fixed_habits
-
-# --- 4. SOUND SYSTEM ---
+# --- 6. SOUND SYSTEM ---
 def play_sound_and_wait(sound_type="pop"):
     vibrate_js = """<script>if(navigator.vibrate){navigator.vibrate([200]);}</script>"""
     components.html(vibrate_js, height=0, width=0)
@@ -62,19 +89,7 @@ def play_sound_and_wait(sound_type="pop"):
     <source src="{url}" type="audio/mp3">
     </audio>
     """, unsafe_allow_html=True)
-    time.sleep(0.8) # Sound ko bajnay ka time dein
-
-# --- 5. STATE MANAGEMENT ---
-if 'user_name' not in st.session_state: st.session_state.user_name = "Boss"
-if 'xp' not in st.session_state: st.session_state.xp = 0
-if 'level' not in st.session_state: st.session_state.level = 1
-if 'balance' not in st.session_state: st.session_state.balance = 0
-if 'water' not in st.session_state: st.session_state.water = 0
-if 'transactions' not in st.session_state: st.session_state.transactions = []
-if 'currency' not in st.session_state: st.session_state.currency = "PKR"
-if 'timezone' not in st.session_state: st.session_state.timezone = "Asia/Karachi"
-if 'notifications' not in st.session_state: st.session_state.notifications = True
-if 'journal_logs' not in st.session_state: st.session_state.journal_logs = []
+    time.sleep(0.5)
 
 # --- LEVEL UP ---
 def check_level_up():
@@ -83,11 +98,16 @@ def check_level_up():
         st.session_state.level += 1
         st.session_state.xp = 0 
         play_sound_and_wait("levelup")
-        st.session_state.run_effect = "balloons" # Level up par balloons
+        st.session_state.run_effect = "balloons"
         st.toast(f"🎉 LEVEL UP! You are now Level {st.session_state.level}!", icon="🆙")
 
-# --- 6. LOGIN ---
+# --- 7. ONE-TIME LOGIN CHECK ---
 def check_auth():
+    # 1. Check if already permanently logged in
+    if is_permanently_logged_in():
+        return True
+    
+    # 2. If not, show login screen
     if "auth" not in st.session_state:
         try: users = st.secrets["users"]
         except: 
@@ -96,19 +116,23 @@ def check_auth():
         
         c1, c2, c3 = st.columns([1,2,1])
         with c2:
-            st.markdown("## ⚡ Life OS Pro")
+            st.markdown("## 🔐 One-Time Login")
+            st.info("Log in once, and stay logged in until Factory Reset.")
             with st.form("Log"):
                 e = st.text_input("Email")
                 p = st.text_input("Password", type="password")
-                if st.form_submit_button("Login"):
+                if st.form_submit_button("Authenticate Device"):
                     if e in users and users[e] == p:
                         st.session_state.auth = True
+                        set_permanent_login() # <--- SAVES LOGIN PERMANENTLY
+                        st.success("Device Verified! Redirecting...")
+                        time.sleep(1)
                         st.rerun()
-                    else: st.error("Access Denied")
+                    else: st.error("❌ Invalid Credentials")
         return False
     return True
 
-# --- 7. MAIN APP ---
+# --- 8. MAIN APP ---
 if check_auth():
     
     # CSS Styling
@@ -117,8 +141,8 @@ if check_auth():
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;800&display=swap');
     html, body, [class*="css"] { font-family: 'Poppins', sans-serif; }
     .stApp { background-color: #0E1117; }
-    .card { background-color: #1A1C24; padding: 20px; border-radius: 15px; border: 1px solid #333; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-    .neon-text { font-size: 38px; font-weight: 800; color: #fff; text-shadow: 0 0 10px rgba(0, 255, 127, 0.5); }
+    .card { background-color: #1A1C24; padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 15px; }
+    .neon-text { font-size: 32px; font-weight: 800; color: #fff; text-shadow: 0 0 10px rgba(0, 255, 127, 0.5); }
     .stButton>button { width: 100%; border-radius: 12px; height: 50px; font-weight: 600; }
     
     /* CLOCK STYLE */
@@ -128,7 +152,7 @@ if check_auth():
         border-radius: 15px; border: 1px solid #FF1493;
         box-shadow: 0 0 15px rgba(255, 20, 147, 0.3); margin-bottom: 20px;
     }
-    .time-font { font-size: 48px; font-weight: 900; color: #FFF; font-family: monospace; }
+    .time-font { font-size: 42px; font-weight: 900; color: #FFF; font-family: monospace; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -139,14 +163,13 @@ if check_auth():
     # --- SIDEBAR ---
     with st.sidebar:
         st.title(f"🚀 {st.session_state.user_name}")
-        st.markdown(f"**Lvl {st.session_state.level}** • {st.session_state.xp} XP")
+        st.caption(f"Lvl {st.session_state.level} • {st.session_state.xp} XP")
         st.progress(st.session_state.xp / (st.session_state.level * 100))
         st.write("---")
         menu = st.radio("Navigate", ["📊 Dashboard", "🎯 Focus", "💰 Wallet", "💪 Habits", "📝 Journal", "⚙️ Settings"])
 
     # === DASHBOARD ===
     if menu == "📊 Dashboard":
-        # 1. CLOCK
         t_str = pk_time.strftime('%I:%M %p')
         d_str = pk_time.strftime('%A, %d %B')
         st.markdown(f"""
@@ -156,31 +179,26 @@ if check_auth():
         </div>
         """, unsafe_allow_html=True)
 
-        # 2. GREETING
         hr = pk_time.hour
         greet = "Morning" if 5<=hr<12 else "Afternoon" if 12<=hr<17 else "Evening" if 17<=hr<21 else "Night"
-        st.markdown(f"<h1>Good {greet}, {st.session_state.user_name}! 👋</h1>", unsafe_allow_html=True)
+        st.markdown(f"### Good {greet}! 👋")
         
-        # 3. QUOTE
-        quotes = [
-            "Focus on the process, not the outcome.", 
-            "Discipline is doing what needs to be done.", 
-            "Your future is created by what you do today.",
-            "Don't stop when you're tired. Stop when you're done."
-        ]
-        st.info(f"💡 **Daily Wisdom:** {random.choice(quotes)}")
+        quotes = ["Focus on the process.", "Discipline is freedom.", "One Day or Day One?"]
+        st.info(f"💡 {random.choice(quotes)}")
 
-        # 4. SUMMARY CARDS
         c1, c2 = st.columns(2)
         with c1:
             st.markdown(f"<div class='card'><h5>💰 Balance</h5><div class='neon-text' style='color:#00FF7F;'>{st.session_state.currency} {st.session_state.balance}</div></div>", unsafe_allow_html=True)
         with c2:
-            pending = sum(1 for g in st.session_state.goals if not g['done'])
+            try:
+                pending = sum(1 for g in st.session_state.goals if not g.get('done', False))
+            except:
+                pending = 0
             st.markdown(f"<div class='card'><h5>🎯 Pending</h5><div class='neon-text' style='color:#FF4500;'>{pending}</div></div>", unsafe_allow_html=True)
 
-    # === FOCUS (GOALS) ===
+    # === FOCUS ===
     elif menu == "🎯 Focus":
-        st.title("Daily Missions 🎯")
+        st.title("Missions 🎯")
         
         with st.expander("➕ Add Goal", expanded=False):
             new_g = st.text_input("Goal Name")
@@ -190,26 +208,27 @@ if check_auth():
                     st.rerun()
 
         st.markdown("<div class='card'>", unsafe_allow_html=True)
-        for i, g in enumerate(st.session_state.goals):
-            c1, c2, c3 = st.columns([1, 6, 1])
-            with c1:
-                chk = st.checkbox("", value=g['done'], key=f"g{i}")
-                if chk != g['done']:
-                    st.session_state.goals[i]['done'] = chk
-                    if chk:
-                        st.session_state.xp += 20
-                        check_level_up()
-                        play_sound_and_wait("win")
-                        # FLAG SET FOR NEXT RELOAD
-                        st.session_state.run_effect = "balloons" 
-                        st.toast("Goal Completed! +20 XP", icon="🎈")
+        if st.session_state.goals:
+            for i, g in enumerate(st.session_state.goals):
+                c1, c2, c3 = st.columns([1, 6, 1])
+                with c1:
+                    chk = st.checkbox("", value=g.get('done', False), key=f"goal_check_{i}")
+                    if chk != g.get('done', False):
+                        st.session_state.goals[i]['done'] = chk
+                        if chk:
+                            st.session_state.xp += 20
+                            check_level_up()
+                            play_sound_and_wait("win")
+                            st.session_state.run_effect = "balloons"
+                            st.rerun()
+                with c2:
+                    st.session_state.goals[i]['text'] = st.text_input(f"g_t{i}", g.get('text', ''), label_visibility="collapsed")
+                with c3:
+                    if st.button("🗑️", key=f"del_g{i}"):
+                        st.session_state.goals.pop(i)
                         st.rerun()
-            with c2:
-                st.session_state.goals[i]['text'] = st.text_input(f"g_t{i}", g['text'], label_visibility="collapsed")
-            with c3:
-                if st.button("🗑️", key=f"del_g{i}"):
-                    st.session_state.goals.pop(i)
-                    st.rerun()
+        else:
+            st.info("No goals yet.")
         st.markdown("</div>", unsafe_allow_html=True)
 
     # === WALLET ===
@@ -218,17 +237,15 @@ if check_auth():
         val = st.session_state.balance
         color = "#00FF7F" if val >= 0 else "#FF4500"
         
-        st.markdown(f"<div class='card' style='text-align:center;'><h5 style='margin:0;'>Balance</h5><h1 style='color:{color}; font-size:48px; margin:0;'>{curr} {val}</h1></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='card' style='text-align:center;'><h5 style='margin:0;'>Balance</h5><h1 style='color:{color}; font-size:42px; margin:0;'>{curr} {val}</h1></div>", unsafe_allow_html=True)
 
-        tab1, tab2, tab3 = st.tabs(["➕ Add", "📜 History", "📊 Analytics"])
+        tab1, tab2, tab3 = st.tabs(["Add", "History", "Charts"])
         
-        income_cats = ["💼 Salary", "💻 Freelance", "📈 Business", "🎁 Gift", "💰 Bonus"]
-        expense_cats = ["🍔 Food", "🏠 Rent", "🚗 Fuel", "🛍️ Shopping", "💡 Bills", "💊 Medical", "🎉 Fun"]
+        income_cats = ["Salary", "Freelance", "Business", "Gift"]
+        expense_cats = ["Food", "Rent", "Fuel", "Shopping", "Bills", "Fun"]
 
         with tab1:
-            st.write("#### New Transaction")
             typ = st.radio("Type", ["Expense 🔴", "Income 🟢"], horizontal=True)
-            
             with st.form("money"):
                 if "Income" in typ: cat = st.selectbox("Source", income_cats)
                 else: cat = st.selectbox("Category", expense_cats)
@@ -246,9 +263,7 @@ if check_auth():
                     st.session_state.xp += 10
                     check_level_up()
                     play_sound_and_wait("cash")
-                    # FLAG SET FOR SNOW (Satisfying for money too)
                     st.session_state.run_effect = "snow"
-                    st.toast("Transaction Saved!", icon="💰")
                     st.rerun()
         
         with tab2:
@@ -268,7 +283,7 @@ if check_auth():
 
     # === HABITS ===
     elif menu == "💪 Habits":
-        st.title("Habits & Health 🌱")
+        st.title("Habits 🌱")
         
         st.markdown("<div class='card'><h4>💧 Hydration</h4>", unsafe_allow_html=True)
         st.progress(min(st.session_state.water / 8, 1.0))
@@ -278,7 +293,7 @@ if check_auth():
             if st.session_state.water < 8:
                 st.session_state.water += 1
                 play_sound_and_wait("pop")
-                st.session_state.run_effect = "snow" # Water drops -> Snow effect
+                st.session_state.run_effect = "snow"
                 st.rerun()
         if c2.button("➖ Undo"):
             if st.session_state.water > 0:
@@ -294,34 +309,32 @@ if check_auth():
                 st.session_state.habits.append({"name": nh, "streak": 0})
                 st.rerun()
                 
-        for i, h in enumerate(st.session_state.habits):
-            c_x, c_y, c_z, c_del = st.columns([3, 1, 1, 0.5])
-            c_x.markdown(f"**{h['name']}**")
-            c_y.metric("Streak", f"{h['streak']} 🔥")
-            if c_z.button("Done", key=f"h_{i}"):
-                st.session_state.habits[i]['streak'] += 1
-                st.session_state.xp += 15
-                check_level_up()
-                play_sound_and_wait("pop")
-                # FLAG SET FOR SNOW
-                st.session_state.run_effect = "snow"
-                st.toast("Streak Increased!", icon="❄️")
-                st.rerun()
-            if c_del.button("x", key=f"del_h{i}"):
-                st.session_state.habits.pop(i)
-                st.rerun()
+        if st.session_state.habits:
+            for i, h in enumerate(st.session_state.habits):
+                c_x, c_y, c_z, c_del = st.columns([3, 1, 1, 0.5])
+                c_x.markdown(f"**{h.get('name','Habit')}**")
+                c_y.metric("Streak", f"{h.get('streak',0)} 🔥")
+                if c_z.button("Done", key=f"habit_done_{i}"):
+                    st.session_state.habits[i]['streak'] += 1
+                    st.session_state.xp += 15
+                    check_level_up()
+                    play_sound_and_wait("pop")
+                    st.session_state.run_effect = "snow"
+                    st.rerun()
+                if c_del.button("x", key=f"del_h{i}"):
+                    st.session_state.habits.pop(i)
+                    st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
     # === JOURNAL ===
     elif menu == "📝 Journal":
-        st.title("Daily Journal 📔")
+        st.title("Journal 📔")
         
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         c_m, c_s = st.columns(2)
-        mood = c_m.selectbox("Mood Today", ["Happy 🙂", "Calm 😌", "Stressed 😫", "Sad 😢", "Angry 😠"])
-        sleep = c_s.selectbox("Sleep Quality", ["8+ Hours (Great) 💤", "6-7 Hours (Okay)", "4-5 Hours (Bad)", "Less than 4"])
-        
-        gratitude = st.text_area("Thing I am grateful for...", placeholder="I am grateful for...")
+        mood = c_m.selectbox("Mood", ["Happy 🙂", "Calm 😌", "Stressed 😫", "Sad 😢", "Angry 😠"])
+        sleep = c_s.selectbox("Sleep", ["8+ Hours 💤", "6-7 Hours", "4-5 Hours", "Less than 4"])
+        gratitude = st.text_area("Gratitude", placeholder="I am grateful for...")
         
         if st.button("Save Entry"):
             entry = {"Date": str(pk_time.date()), "Mood": mood, "Sleep": sleep, "Gratitude": gratitude}
@@ -329,9 +342,7 @@ if check_auth():
             st.session_state.xp += 5
             check_level_up()
             play_sound_and_wait("win")
-            # FLAG SET FOR BALLOONS
             st.session_state.run_effect = "balloons"
-            st.success("Entry Saved!")
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
         
@@ -339,9 +350,9 @@ if check_auth():
             st.write("### Past Entries")
             st.dataframe(pd.DataFrame(st.session_state.journal_logs[::-1]), use_container_width=True)
 
-    # === SETTINGS ===
+    # === SETTINGS (WITH FACTORY RESET) ===
     elif menu == "⚙️ Settings":
-        st.title("Settings ⚙️")
+        st.title("Settings")
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         
         new_n = st.text_input("Display Name", value=st.session_state.user_name)
@@ -361,6 +372,7 @@ if check_auth():
             st.rerun()
             
         st.markdown("</div>", unsafe_allow_html=True)
-        if st.button("🔴 Factory Reset App"):
-            st.session_state.clear()
-            st.rerun()
+        
+        st.warning("⚠️ Danger Zone")
+        if st.button("🔴 Factory Reset (Logout & Clear Data)"):
+            factory_reset_pro() # <--- RESETS EVERYTHING & LOGS OUT
