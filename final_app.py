@@ -4,19 +4,14 @@ import plotly.express as px
 from datetime import datetime
 import pytz 
 import streamlit.components.v1 as components 
+import time
 
 # --- CONFIG ---
 st.set_page_config(page_title="Life OS", page_icon="🌸", layout="centered")
 
-# --- 🎵 FORCE SOUND (HTML Method) ---
-def play_sound(sound_type="pop"):
-    # 1. Vibration
-    vibrate_js = """<script>
-    if (navigator.vibrate) { navigator.vibrate([200]); }
-    </script>"""
-    components.html(vibrate_js, height=0, width=0)
-    
-    # 2. Sound URLs
+# --- 🎵 ADVANCED SOUND LOGIC ---
+def play_sound(sound_type):
+    # Sounds Map
     sounds = {
         "win": "https://www.soundjay.com/misc/sounds/magic-chime-01.mp3",
         "cash": "https://www.soundjay.com/misc/sounds/coins-in-hand-2.mp3",
@@ -25,30 +20,31 @@ def play_sound(sound_type="pop"):
     }
     url = sounds.get(sound_type, sounds["pop"])
     
-    # 3. HTML Audio Injection (Hidden but Autoplay)
+    # Hidden Audio Player (Autoplay)
     sound_html = f"""
     <audio autoplay="true" style="display:none;">
     <source src="{url}" type="audio/mp3">
     </audio>
+    <script>
+    if (navigator.vibrate) {{ navigator.vibrate([200]); }}
+    </script>
     """
     st.markdown(sound_html, unsafe_allow_html=True)
 
-# --- AUTO-REPAIR ---
-if 'goals' in st.session_state and st.session_state.goals:
-    if isinstance(st.session_state.goals[0], dict) and 'done' not in st.session_state.goals[0]:
-        del st.session_state['goals'] 
-        del st.session_state['habits'] 
-
-# --- STATE INIT ---
+# --- STATE MANAGEMENT ---
 if 'user_name' not in st.session_state: st.session_state.user_name = "User"
 if 'water_count' not in st.session_state: st.session_state.water_count = 0
 if 'total_savings' not in st.session_state: st.session_state.total_savings = 0 
 if 'expenses' not in st.session_state: st.session_state.expenses = []
 if 'life_score' not in st.session_state: st.session_state.life_score = 0
-if 'habits' not in st.session_state: 
-    st.session_state.habits = [{"name": "Exercise", "streak": 0}]
-if 'goals' not in st.session_state:
-    st.session_state.goals = [{"text": "Goal 1", "done": False}]
+if 'habits' not in st.session_state: st.session_state.habits = [{"name": "Exercise", "streak": 0}]
+if 'goals' not in st.session_state: st.session_state.goals = [{"text": "Goal 1", "done": False}]
+
+# --- AUTO REPAIR ---
+if 'goals' in st.session_state and st.session_state.goals:
+    if isinstance(st.session_state.goals[0], dict) and 'done' not in st.session_state.goals[0]:
+        del st.session_state['goals']
+        del st.session_state['habits']
 
 # --- LOGIN ---
 def check_password():
@@ -57,9 +53,9 @@ def check_password():
         except: 
             st.warning("⚠️ Secrets Not Found")
             return False
-            
+        
         with st.form("Login"):
-            st.markdown("## 🔐 Login")
+            st.markdown("## 🔐 Paid Member Login")
             email = st.text_input("Email")
             password = st.text_input("Password", type="password")
             if st.form_submit_button("Login"):
@@ -67,12 +63,18 @@ def check_password():
                     st.session_state["authenticated"] = True
                     st.session_state["user_email"] = email
                     st.rerun()
-                else: st.error("❌ Error")
+                else: st.error("❌ Invalid Login")
         return False
     return True
 
-# --- APP ---
+# --- MAIN APP ---
 if check_password():
+    
+    # 🔊 CHECK AUDIO QUEUE (Sound bajane ka mechanism)
+    if 'audio_queue' in st.session_state:
+        play_sound(st.session_state.audio_queue)
+        del st.session_state.audio_queue # Sound baja kar delete kar do
+    
     # Time
     pk_tz = pytz.timezone('Asia/Karachi')
     pk_time = datetime.now(pk_tz)
@@ -105,18 +107,17 @@ if check_password():
         for i, goal in enumerate(st.session_state.goals):
             c1, c2 = st.columns([1, 8])
             with c1:
-                if st.checkbox("", key=f"g_{i}", value=goal['done']):
-                    if not goal['done']:
-                        st.session_state.goals[i]['done'] = True
+                # Goal Check Logic
+                is_checked = st.checkbox("", key=f"g_{i}", value=goal['done'])
+                if is_checked != goal['done']: # Agar status change hua
+                    st.session_state.goals[i]['done'] = is_checked
+                    if is_checked:
                         st.session_state.life_score += 10
-                        play_sound("win")
+                        st.session_state.audio_queue = "win" # Sound Queue mein dalo
                         st.balloons()
-                        st.rerun()
-                else:
-                    if goal['done']:
-                         st.session_state.goals[i]['done'] = False
-                         st.session_state.life_score -= 10
-                         st.rerun()
+                    else:
+                        st.session_state.life_score -= 10
+                    st.rerun() # Refresh
             with c2:
                 st.session_state.goals[i]['text'] = st.text_input(f"G{i}", goal['text'], label_visibility="collapsed")
 
@@ -131,7 +132,7 @@ if check_password():
         if c_b.button("Add"):
             if nh:
                 st.session_state.habits.append({"name": nh, "streak": 0})
-                play_sound("pop")
+                st.session_state.audio_queue = "pop"
                 st.rerun()
         
         for i, h in enumerate(st.session_state.habits):
@@ -141,7 +142,7 @@ if check_password():
             if c3.button("+1", key=f"h{i}"):
                 st.session_state.habits[i]['streak'] += 1
                 st.session_state.life_score += 5
-                play_sound("pop")
+                st.session_state.audio_queue = "pop"
                 st.rerun()
             if c4.button("🗑️", key=f"d{i}"):
                 st.session_state.habits.pop(i)
@@ -164,7 +165,7 @@ if check_password():
                     st.session_state.expenses.append({
                         "Date": str(pk_time.date()), "Item": item, "Amount": amt, "Type": typ, "Category": cat
                     })
-                    play_sound("cash")
+                    st.session_state.audio_queue = "cash"
                     st.rerun()
         with tb:
             if st.session_state.expenses: st.dataframe(pd.DataFrame(st.session_state.expenses))
@@ -179,9 +180,10 @@ if check_password():
         for i in range(4): cl.append(cols2[i].checkbox(f"{i+5}", value=st.session_state.water_count >= i+5, key=f"w2_{i}"))
         
         nc = sum(cl)
-        if nc > st.session_state.water_count:
+        if nc != st.session_state.water_count:
              st.session_state.water_count = nc
-             play_sound("pop")
+             if nc > 0: # Sirf increase par sound
+                 st.session_state.audio_queue = "pop"
              st.rerun()
 
         st.write("---")
@@ -190,7 +192,7 @@ if check_password():
         st.text_area("Gratitude")
         if st.button("Save Log"):
             st.session_state.life_score += 5
-            play_sound("tada")
+            play_sound("tada") # Yahan rerun nahi hay, is liye direct play_sound chalay ga
             st.success("Saved!")
 
     # 5. SETUP
@@ -198,5 +200,5 @@ if check_password():
         nn = st.text_input("Name", value=st.session_state.user_name)
         if st.button("Update"): 
             st.session_state.user_name = nn
-            play_sound("pop")
+            st.session_state.audio_queue = "pop"
             st.rerun()
