@@ -43,17 +43,20 @@ def check_password():
             users = st.secrets["users"]
         except:
             st.warning("⚠️ Access Control Error: Add [users] to Secrets.")
-            return True 
+            # Temporary bypass hata diya hay taake security full rahay
             
         with st.form("Login"):
             st.markdown("## 🔐 Paid Member Login")
             email = st.text_input("Email")
             password = st.text_input("Password", type="password")
             if st.form_submit_button("Login"):
-                if email in users and users[email] == password:
+                # Agar secrets na hon to crash se bachanay ke liye check
+                if 'users' in locals() and email in users and users[email] == password:
                     st.session_state["authenticated"] = True
                     st.session_state["user_email"] = email
                     st.rerun()
+                elif 'users' not in locals():
+                     st.error("Secrets not setup yet.")
                 else:
                     st.error("❌ Email ya Password ghalat hay.")
         return False
@@ -100,146 +103,13 @@ if check_password():
         st.divider()
         st.subheader("Today's Focus 🎯")
         
-        # --- NEW: GOAL PROGRESS BAR ---
+        # --- GOAL PROGRESS BAR ---
         total_goals = len(st.session_state.goals)
         completed_goals = sum(1 for g in st.session_state.goals if g['done'])
         
-        # Prevent division by zero
         progress_val = completed_goals / total_goals if total_goals > 0 else 0
         st.progress(progress_val)
-        st.caption(f"Progress: {completed_goals}/{total_goals} Completed")
-        # -----------------------------
+        st.caption(f"Progress: {int(progress_val*100)}% Completed")
+        # -------------------------
 
-        for i, goal in enumerate(st.session_state.goals):
-            c1, c2 = st.columns([1, 8])
-            with c1:
-                if st.checkbox("", key=f"g_{i}", value=goal['done']):
-                    if not goal['done']:
-                        st.session_state.goals[i]['done'] = True
-                        st.session_state.life_score += 10
-                        trigger_feedback()
-                        st.balloons()
-                        st.rerun()
-                else:
-                    if goal['done']:
-                         st.session_state.goals[i]['done'] = False
-                         st.session_state.life_score -= 10
-                         st.rerun()
-            with c2:
-                st.session_state.goals[i]['text'] = st.text_input(f"G{i}", goal['text'], label_visibility="collapsed")
-
-        st.divider()
-        st.subheader("Hydration 💧")
-        progress = min(st.session_state.water_count / 8, 1.0)
-        st.progress(progress)
-        st.caption(f"{st.session_state.water_count} / 8 Glasses")
-
-    # === TAB 2: HABITS ===
-    with tab2:
-        st.subheader("Habit Tracker ✨")
-        c_in, c_btn = st.columns([3, 1])
-        with c_in: new_h = st.text_input("New Habit", label_visibility="collapsed")
-        with c_btn: 
-            if st.button("➕"):
-                if new_h:
-                    st.session_state.habits.append({"name": new_h, "streak": 0})
-                    trigger_feedback()
-                    st.rerun()
-        st.write("---")
-        for i, habit in enumerate(st.session_state.habits):
-            with st.container():
-                c1, c2, c3, c4 = st.columns([4, 2, 2, 1])
-                with c1: st.markdown(f"**{habit['name']}**")
-                with c2: st.markdown(f"<span class='streak-num'>{habit['streak']} 🔥</span>", unsafe_allow_html=True)
-                with c3:
-                    if st.button("➕ 1", key=f"h_inc_{i}"):
-                        st.session_state.habits[i]['streak'] += 1  
-                        st.session_state.life_score += 5
-                        trigger_feedback()
-                        st.rerun()
-                with c4:
-                    if st.button("🗑️", key=f"h_del_{i}"):
-                        st.session_state.habits.pop(i)
-                        st.rerun()
-                st.markdown("---")
-
-    # === TAB 3: FINANCE ===
-    with tab3:
-        st.subheader("Wallet 💰")
-        clr = "#00FF7F" if st.session_state.total_savings >= 0 else "#FF4500"
-        st.markdown(f"<h1 style='text-align: center; color: {clr};'>PKR {st.session_state.total_savings}</h1>", unsafe_allow_html=True)
-        
-        t1, t2, t3 = st.tabs(["📝 Add", "📊 Charts", "📜 History"])
-        exp_cats = ["🍔 Food", "🏠 Rent", "🚗 Fuel", "🛍️ Shopping", "💡 Bills", "💊 Medical", "🎓 Fees", "🎉 Fun", "📝 Other"]
-        inc_cats = ["💼 Salary", "💻 Freelance", "📈 Business", "🎁 Gift", "💰 Bonus"]
-
-        with t1:
-            c1, c2 = st.columns(2)
-            with c1:
-                with st.form("ex_form"):
-                    st.write("**Expense 💸**")
-                    item = st.text_input("Item")
-                    cat = st.selectbox("Category", exp_cats)
-                    amt = st.number_input("Amount", min_value=0)
-                    if st.form_submit_button("Spend"):
-                        st.session_state.total_savings -= amt
-                        entry = {"Date": pk_time.strftime("%Y-%m-%d"), "Type": "Expense", "Item": item, "Amount": amt, "Category": cat}
-                        st.session_state.expenses.append(entry)
-                        trigger_feedback()
-                        st.rerun()
-            with c2:
-                with st.form("in_form"):
-                    st.write("**Income 💰**")
-                    src = st.text_input("Source")
-                    cat_in = st.selectbox("Category", inc_cats)
-                    amt_in = st.number_input("Amount", min_value=0)
-                    if st.form_submit_button("Deposit"):
-                        st.session_state.total_savings += amt_in
-                        entry_in = {"Date": pk_time.strftime("%Y-%m-%d"), "Type": "Income", "Item": src, "Amount": amt_in, "Category": cat_in}
-                        st.session_state.expenses.append(entry_in)
-                        trigger_feedback()
-                        st.rerun()
-
-        with t2:
-            if st.session_state.expenses:
-                df = pd.DataFrame(st.session_state.expenses)
-                c_a, c_b = st.columns(2)
-                with c_a:
-                    st.caption("Expenses")
-                    df_ex = df[df["Type"] == "Expense"]
-                    if not df_ex.empty:
-                        fig = px.pie(df_ex, values='Amount', names='Category', hole=0.5)
-                        st.plotly_chart(fig, use_container_width=True)
-                with c_b:
-                    st.caption("Income")
-                    df_in = df[df["Type"] == "Income"]
-                    if not df_in.empty:
-                        fig2 = px.pie(df_in, values='Amount', names='Category', hole=0.5)
-                        st.plotly_chart(fig2, use_container_width=True)
-            else: st.info("No data yet.")
-
-        with t3:
-            if st.session_state.expenses: 
-                st.dataframe(pd.DataFrame(st.session_state.expenses), use_container_width=True)
-
-    # === TAB 4: SELF CARE ===
-    with tab4:
-        st.subheader("Hydration 💧")
-        cols = st.columns(4); check_list = []
-        for i in range(4): check_list.append(cols[i].checkbox(f"{i+1}", value=st.session_state.water_count >= i+1))
-        cols2 = st.columns(4)
-        for i in range(4): check_list.append(cols2[i].checkbox(f"{i+5}", value=st.session_state.water_count >= i+5))
-        new_count = sum(check_list)
-        if new_count > st.session_state.water_count:
-             st.session_state.water_count = new_count
-             trigger_feedback()
-             st.rerun()
-
-    # === SETUP ===
-    with tab_setup:
-        st.subheader("Profile")
-        new_name = st.text_input("Change Name", value=st.session_state.user_name)
-        if st.button("Update"): 
-            st.session_state.user_name = new_name
-            trigger_feedback()
-            st.rerun()
+        for i, goal in enumerate(st.session_state.goals
