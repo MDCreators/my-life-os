@@ -1,189 +1,187 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-from datetime import datetime
+import datetime as dt
 import pytz 
 import streamlit.components.v1 as components 
 
-# --- 1. CONFIGURATION ---
-st.set_page_config(
-    page_title="Life OS", 
-    page_icon="🌸", 
-    layout="centered"
-)
+# --- CONFIG ---
+st.set_page_config(layout="centered", page_title="Life OS", page_icon="🌸")
+ss = st.session_state # Short Alias for Session State
 
-# --- SOUND & VIBRATION ---
-def trigger_feedback():
-    # Vibration Script
-    vibrate_js = """
-    <script>
-    navigator.vibrate = navigator.vibrate || navigator.webkitVibrate || navigator.mozVibrate || navigator.msVibrate;
-    if (navigator.vibrate) { navigator.vibrate([200]); }
-    </script>
-    """
-    components.html(vibrate_js, height=0, width=0)
-    # Sound
-    st.audio(
-        "https://www.soundjay.com/buttons/sounds/button-3.mp3", 
-        format="audio/mp3", 
-        autoplay=True
-    )
+# --- FEEDBACK (Sound + Vibrate) ---
+def run_fb():
+    # 1. Vibrate
+    vcode = """<script>
+    if(navigator.vibrate) { navigator.vibrate([200]); }
+    </script>"""
+    components.html(vcode, height=0, width=0)
+    # 2. Sound
+    st.audio("https://www.soundjay.com/buttons/sounds/button-3.mp3", autoplay=True)
 
-# --- SESSION STATE ---
-if 'user_name' not in st.session_state: 
-    st.session_state.user_name = "User"
-if 'water_count' not in st.session_state: 
-    st.session_state.water_count = 0
-if 'total_savings' not in st.session_state: 
-    st.session_state.total_savings = 0 
-if 'expenses' not in st.session_state: 
-    st.session_state.expenses = []
-if 'life_score' not in st.session_state: 
-    st.session_state.life_score = 0
-if 'habits' not in st.session_state: 
-    st.session_state.habits = [
-        {"name": "Exercise", "streak": 0}, 
-        {"name": "Prayers", "streak": 0}
-    ]
-if 'goals' not in st.session_state:
-    st.session_state.goals = [
-        {"text": "Goal 1", "done": False},
-        {"text": "Goal 2", "done": False},
-        {"text": "Goal 3", "done": False}
-    ]
+# --- STATE ---
+if 'u_name' not in ss: ss.u_name = "User"
+if 'water' not in ss: ss.water = 0
+if 'money' not in ss: ss.money = 0 
+if 'exp' not in ss: ss.exp = []
+if 'score' not in ss: ss.score = 0
+if 'habits' not in ss: ss.habits = [{"name": "Exercise", "s": 0}]
+if 'goals' not in ss: 
+    ss.goals = [{"t": "Goal 1", "d": False}, {"t": "Goal 2", "d": False}]
 
-# --- LOGIN SYSTEM ---
-def check_password():
-    if "authenticated" not in st.session_state:
-        try:
-            users = st.secrets["users"]
-        except:
-            st.warning("⚠️ Access Control Error: Add [users] to Secrets.")
-            
-        with st.form("Login"):
-            st.markdown("## 🔐 Paid Member Login")
-            email = st.text_input("Email")
-            password = st.text_input("Password", type="password")
-            
-            if st.form_submit_button("Login"):
-                if 'users' in locals() and email in users and users[email] == password:
-                    st.session_state["authenticated"] = True
-                    st.session_state["user_email"] = email
+# --- AUTH ---
+def check_auth():
+    if "auth" not in ss:
+        try: users = st.secrets["users"]
+        except: 
+            st.warning("⚠️ Setup Secrets [users]")
+            return True 
+        
+        with st.form("Log"):
+            st.write("### 🔐 Login")
+            e = st.text_input("Email")
+            p = st.text_input("Pass", type="password")
+            if st.form_submit_button("Go"):
+                if e in users and users[e] == p:
+                    ss.auth = True
+                    ss.email = e
                     st.rerun()
-                elif 'users' not in locals():
-                     st.error("Secrets not setup yet.")
-                else:
-                    st.error("❌ Email ya Password ghalat hay.")
+                else: st.error("Wrong info")
         return False
     return True
 
-# --- MAIN APP ---
-if check_password():
-    
-    # Timezone
-    pk_tz = pytz.timezone('Asia/Karachi')
-    pk_time = datetime.now(pk_tz)
+# --- APP ---
+if check_auth():
+    # Time
+    tz = pytz.timezone('Asia/Karachi')
+    now = dt.datetime.now(tz)
     
     # CSS
-    st.markdown("""
-        <style>
-        .stApp { background-color: #0E1117; color: #FAFAFA; }
-        .stButton>button { 
-            color: white !important; 
-            background-color: #FF1493 !important; 
-            border-radius: 12px; 
-            border: none; 
-            font-weight: bold; 
-        }
-        .stTextInput>div>div>input { 
-            background-color: #262730; 
-            color: white !important; 
-            border-radius: 10px; 
-        }
-        .big-score { 
-            font-size: 24px; 
-            font-weight: bold; 
-            color: #00FF7F; 
-            text-align: center; 
-        }
-        .streak-num { 
-            font-size: 26px; 
-            font-weight: bold; 
-            color: #00BFFF; 
-        }
-        audio { display: none; }
-        </style>
-        """, unsafe_allow_html=True)
+    st.markdown("""<style>
+    .stApp { background-color: #0E1117; color: white; }
+    .stButton>button { background: #FF1493 !important; color: white !important; border: none; }
+    audio { display: none; }
+    </style>""", unsafe_allow_html=True)
 
-    # Header
-    dt_str = pk_time.strftime("%A, %d %B")
-    tm_str = pk_time.strftime("%I:%M %p")
-    st.markdown(f"<p style='text-align: center; color: #888;'>🗓️ {dt_str} | ⏰ {tm_str} (PKT)</p>", unsafe_allow_html=True)
+    # Head
+    st.caption(f"🗓️ {now.strftime('%d %B')} | ⏰ {now.strftime('%I:%M %p')}")
+    st.title(f"Hi, {ss.u_name}! 🌙")
+    st.write(f"**🌟 XP: {ss.score}**")
 
-    curr_hour = pk_time.hour
-    if 5 <= curr_hour < 12: greeting = "Good Morning"
-    elif 12 <= curr_hour < 17: greeting = "Good Afternoon"
-    elif 17 <= curr_hour < 21: greeting = "Good Evening"
-    else: greeting = "Good Night"
-
-    st.markdown(f"<h1 style='text-align: center;'>{greeting}, {st.session_state.user_name}! 🌙</h1>", unsafe_allow_html=True)
-    st.markdown(f"<div class='big-score'>🌟 Life Score: {st.session_state.life_score} XP</div>", unsafe_allow_html=True)
-    
     # Tabs
-    tab_setup, tab1, tab2, tab3, tab4 = st.tabs(["⚙️ Setup", "🏠 Main Hub", "✅ Habits", "💰 Finance", "🌿 Self-Care"])
+    t1, t2, t3, t4, t5 = st.tabs(["🏠 Hub", "✅ Habits", "💰 Wallet", "🌿 Care", "⚙️ Set"])
 
-    # === TAB 1: MAIN HUB ===
-    with tab1:
-        st.divider()
-        st.subheader("Today's Focus 🎯")
+    # 1. HUB
+    with t1:
+        st.write("### Focus 🎯")
+        # Progress
+        done = sum(1 for g in ss.goals if g['d'])
+        total = len(ss.goals)
+        if total > 0: st.progress(done/total)
         
-        # --- GOAL PROGRESS BAR ---
-        total_goals = len(st.session_state.goals)
-        completed_goals = sum(1 for g in st.session_state.goals if g['done'])
-        
-        progress_val = completed_goals / total_goals if total_goals > 0 else 0
-        st.progress(progress_val)
-        st.caption(f"Progress: {int(progress_val*100)}% Completed")
-        
-        for i, goal in enumerate(st.session_state.goals):
+        for i, g in enumerate(ss.goals):
             c1, c2 = st.columns([1, 8])
             with c1:
-                if st.checkbox("", key=f"g_{i}", value=goal['done']):
-                    if not goal['done']:
-                        st.session_state.goals[i]['done'] = True
-                        st.session_state.life_score += 10
-                        trigger_feedback()
+                if st.checkbox("", key=f"g{i}", value=g['d']):
+                    if not g['d']:
+                        ss.goals[i]['d'] = True
+                        ss.score += 10
+                        run_fb()
                         st.balloons()
                         st.rerun()
                 else:
-                    if goal['done']:
-                         st.session_state.goals[i]['done'] = False
-                         st.session_state.life_score -= 10
-                         st.rerun()
+                    if g['d']:
+                        ss.goals[i]['d'] = False
+                        ss.score -= 10
+                        st.rerun()
             with c2:
-                # SAFE INPUT (Broken lines)
-                st.session_state.goals[i]['text'] = st.text_input(
-                    f"G{i}", 
-                    goal['text'], 
-                    label_visibility="collapsed"
-                )
+                ss.goals[i]['t'] = st.text_input(f"txt{i}", g['t'], label_visibility="collapsed")
+        
+        st.write("---")
+        st.write(f"### 💧 Water: {ss.water}/8")
+        st.progress(min(ss.water/8, 1.0))
 
-        st.divider()
-        st.subheader("Hydration 💧")
-        progress = min(st.session_state.water_count / 8, 1.0)
-        st.progress(progress)
-        st.caption(f"{st.session_state.water_count} / 8 Glasses")
+    # 2. HABITS
+    with t2:
+        c_a, c_b = st.columns([3, 1])
+        nh = c_a.text_input("New Habit", label_visibility="collapsed")
+        if c_b.button("Add"):
+            if nh:
+                ss.habits.append({"name": nh, "s": 0})
+                run_fb()
+                st.rerun()
+        
+        for i, h in enumerate(ss.habits):
+            c1, c2, c3, c4 = st.columns([4, 2, 2, 1])
+            c1.write(f"**{h['name']}**")
+            c2.write(f"🔥 {h['s']}")
+            if c3.button("+1", key=f"h{i}"):
+                ss.habits[i]['s'] += 1
+                ss.score += 5
+                run_fb()
+                st.rerun()
+            if c4.button("X", key=f"d{i}"):
+                ss.habits.pop(i)
+                st.rerun()
 
-    # === TAB 2: HABITS ===
-    with tab2:
-        st.subheader("Habit Tracker ✨")
-        c_in, c_btn = st.columns([3, 1])
-        with c_in: 
-            # SAFE INPUT (Broken lines)
-            new_h = st.text_input(
-                "New Habit", 
-                label_visibility="collapsed"
-            )
-        with c_btn: 
-            if st.button("➕"):
-                if new
+    # 3. WALLET
+    with t3:
+        st.metric("Savings", f"PKR {ss.money}")
+        ta, tb = st.tabs(["Add", "List"])
+        with ta:
+            with st.form("fin"):
+                item = st.text_input("Item")
+                amt = st.number_input("Amount", min_value=0)
+                typ = st.selectbox("Type", ["Expense", "Income"])
+                if st.form_submit_button("Save"):
+                    if typ == "Expense": ss.money -= amt
+                    else: ss.money += amt
+                    
+                    ss.exp.append({
+                        "Date": str(now.date()), 
+                        "Item": item, 
+                        "Amt": amt, 
+                        "Type": typ
+                    })
+                    run_fb()
+                    st.rerun()
+        with tb:
+            if ss.exp: st.dataframe(pd.DataFrame(ss.exp))
+
+    # 4. CARE
+    with t4:
+        st.write("### Hydration")
+        # Checkboxes for water
+        cols = st.columns(4)
+        cl = [] # check_list
+        for i in range(4): 
+            val = ss.water >= (i+1)
+            cl.append(cols[i].checkbox(f"{i+1}", value=val, key=f"w1_{i}"))
+            
+        cols2 = st.columns(4)
+        for i in range(4): 
+            val = ss.water >= (i+5)
+            cl.append(cols2[i].checkbox(f"{i+5}", value=val, key=f"w2_{i}"))
+            
+        # FIXED SHORT LOGIC
+        nc = sum(cl) # nc = new_count
+        if nc > ss.water:
+             ss.water = nc
+             run_fb()
+             st.rerun()
+                
+        st.write("---")
+        st.write("### Journal")
+        st.select_slider("Mood", ["😞", "😐", "🙂", "🤩"])
+        st.text_area("Gratitude")
+        if st.button("Save Log"):
+            ss.score += 5
+            run_fb()
+            st.success("Saved!")
+
+    # 5. SET
+    with t5:
+        nn = st.text_input("Name", value=ss.u_name)
+        if st.button("Update Profile"):
+            ss.u_name = nn
+            run_fb()
+            st.rerun()
