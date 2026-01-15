@@ -14,22 +14,26 @@ st.set_page_config(
 
 # --- SOUND & VIBRATION ---
 def trigger_feedback():
-    # Vibration Script
     vibrate_js = """
     <script>
-    navigator.vibrate = navigator.vibrate || navigator.webkitVibrate || navigator.mozVibrate || navigator.msVibrate;
     if (navigator.vibrate) { navigator.vibrate([200]); }
     </script>
     """
     components.html(vibrate_js, height=0, width=0)
-    # Sound
     st.audio(
         "https://www.soundjay.com/buttons/sounds/button-3.mp3", 
         format="audio/mp3", 
         autoplay=True
     )
 
-# --- SESSION STATE ---
+# --- 2. AUTO-REPAIR SESSION STATE (FIX FOR ERROR) ---
+# Ye check karega ke agar purana data (d/t) hay to usay delete kar de
+if 'goals' in st.session_state and st.session_state.goals:
+    if 'done' not in st.session_state.goals[0]:
+        del st.session_state['goals'] # Purana data delete
+        del st.session_state['habits'] # Purana habits bhi delete
+
+# --- 3. INITIALIZE STATE ---
 if 'user_name' not in st.session_state: 
     st.session_state.user_name = "User"
 if 'water_count' not in st.session_state: 
@@ -58,7 +62,8 @@ def check_password():
         try:
             users = st.secrets["users"]
         except:
-            st.warning("⚠️ Setup Error: Add [users] to Secrets.")
+            st.warning("⚠️ Secrets Not Found")
+            return False
             
         with st.form("Login"):
             st.markdown("## 🔐 Paid Member Login")
@@ -66,12 +71,10 @@ def check_password():
             password = st.text_input("Password", type="password")
             
             if st.form_submit_button("Login"):
-                if 'users' in locals() and email in users and users[email] == password:
+                if email in users and users[email] == password:
                     st.session_state["authenticated"] = True
                     st.session_state["user_email"] = email
                     st.rerun()
-                elif 'users' not in locals():
-                     st.error("Secrets not setup yet.")
                 else:
                     st.error("❌ Invalid Email or Password")
         return False
@@ -139,7 +142,8 @@ if check_password():
         
         # --- GOAL PROGRESS BAR ---
         total_goals = len(st.session_state.goals)
-        completed_goals = sum(1 for g in st.session_state.goals if g['done'])
+        # Error fix logic included here indirectly
+        completed_goals = sum(1 for g in st.session_state.goals if g.get('done', False))
         
         progress_val = completed_goals / total_goals if total_goals > 0 else 0
         st.progress(progress_val)
@@ -161,7 +165,6 @@ if check_password():
                          st.session_state.life_score -= 10
                          st.rerun()
             with c2:
-                # SAFE INPUT
                 st.session_state.goals[i]['text'] = st.text_input(
                     f"G{i}", 
                     goal['text'], 
@@ -179,7 +182,6 @@ if check_password():
         st.subheader("Habit Tracker ✨")
         c_in, c_btn = st.columns([3, 1])
         with c_in: 
-            # SAFE INPUT
             new_h = st.text_input(
                 "New Habit", 
                 label_visibility="collapsed"
@@ -201,4 +203,133 @@ if check_password():
                         st.session_state.habits[i]['streak'] += 1  
                         st.session_state.life_score += 5
                         trigger_feedback()
-                        st.rerun
+                        st.rerun()
+                with c4:
+                    if st.button("🗑️", key=f"h_del_{i}"):
+                        st.session_state.habits.pop(i)
+                        st.rerun()
+                st.markdown("---")
+
+    # === TAB 3: FINANCE ===
+    with tab3:
+        st.subheader("Wallet 💰")
+        clr = "#00FF7F" if st.session_state.total_savings >= 0 else "#FF4500"
+        st.markdown(f"<h1 style='text-align: center; color: {clr};'>PKR {st.session_state.total_savings}</h1>", unsafe_allow_html=True)
+        
+        t1, t2, t3 = st.tabs(["📝 Add", "📊 Charts", "📜 History"])
+        exp_cats = ["🍔 Food", "🏠 Rent", "🚗 Fuel", "🛍️ Shopping", "💡 Bills", "💊 Medical", "🎓 Fees", "🎉 Fun", "📝 Other"]
+        inc_cats = ["💼 Salary", "💻 Freelance", "📈 Business", "🎁 Gift", "💰 Bonus"]
+
+        with t1:
+            c1, c2 = st.columns(2)
+            with c1:
+                with st.form("ex_form"):
+                    st.write("**Expense 💸**")
+                    item = st.text_input("Item")
+                    cat = st.selectbox("Category", exp_cats)
+                    amt = st.number_input("Amount", min_value=0)
+                    if st.form_submit_button("Spend"):
+                        st.session_state.total_savings -= amt
+                        entry = {
+                            "Date": pk_time.strftime("%Y-%m-%d"), 
+                            "Type": "Expense", 
+                            "Item": item, 
+                            "Amount": amt, 
+                            "Category": cat
+                        }
+                        st.session_state.expenses.append(entry)
+                        trigger_feedback()
+                        st.rerun()
+            with c2:
+                with st.form("in_form"):
+                    st.write("**Income 💰**")
+                    src = st.text_input("Source")
+                    cat_in = st.selectbox("Category", inc_cats)
+                    amt_in = st.number_input("Amount", min_value=0)
+                    if st.form_submit_button("Deposit"):
+                        st.session_state.total_savings += amt_in
+                        entry_in = {
+                            "Date": pk_time.strftime("%Y-%m-%d"), 
+                            "Type": "Income", 
+                            "Item": src, 
+                            "Amount": amt_in, 
+                            "Category": cat_in
+                        }
+                        st.session_state.expenses.append(entry_in)
+                        trigger_feedback()
+                        st.rerun()
+
+        with t2:
+            if st.session_state.expenses:
+                df = pd.DataFrame(st.session_state.expenses)
+                c_a, c_b = st.columns(2)
+                with c_a:
+                    st.caption("Expenses")
+                    df_ex = df[df["Type"] == "Expense"]
+                    if not df_ex.empty:
+                        fig = px.pie(
+                            df_ex, 
+                            values='Amount', 
+                            names='Category', 
+                            hole=0.5
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                with c_b:
+                    st.caption("Income")
+                    df_in = df[df["Type"] == "Income"]
+                    if not df_in.empty:
+                        fig2 = px.pie(
+                            df_in, 
+                            values='Amount', 
+                            names='Category', 
+                            hole=0.5
+                        )
+                        st.plotly_chart(fig2, use_container_width=True)
+            else: st.info("No data yet.")
+
+        with t3:
+            if st.session_state.expenses: 
+                st.dataframe(
+                    pd.DataFrame(st.session_state.expenses), 
+                    use_container_width=True
+                )
+
+    # === TAB 4: SELF CARE ===
+    with tab4:
+        st.subheader("Hydration 💧")
+        cols = st.columns(4); check_list = []
+        for i in range(4): 
+            check_list.append(cols[i].checkbox(f"{i+1}", value=st.session_state.water_count >= i+1))
+        cols2 = st.columns(4)
+        for i in range(4): 
+            check_list.append(cols2[i].checkbox(f"{i+5}", value=st.session_state.water_count >= i+5))
+        
+        new_count = sum(check_list)
+        if new_count > st.session_state.water_count:
+             st.session_state.water_count = new_count
+             trigger_feedback()
+             st.rerun()
+
+        st.divider()
+        st.subheader("Journal & Mood 📝")
+        c1, c2 = st.columns(2)
+        c1.selectbox("Mood", ["Happy 🙂", "Calm 😌", "Stressed 😫", "Sad 😢", "Angry 😠"])
+        c2.selectbox("Sleep", ["8+ Hours 💤", "6-7 Hours", "4-5 Hours", "Less than 4"])
+        
+        st.text_area("Gratitude", placeholder="I am thankful for...")
+        if st.button("Save Entry"):
+            st.session_state.life_score += 5
+            trigger_feedback()
+            st.success("Saved! (+5 XP)")
+
+    # === SETUP ===
+    with tab_setup:
+        st.subheader("Profile")
+        new_name = st.text_input(
+            "Change Name", 
+            value=st.session_state.user_name
+        )
+        if st.button("Update"): 
+            st.session_state.user_name = new_name
+            trigger_feedback()
+            st.rerun()
