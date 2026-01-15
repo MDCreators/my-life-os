@@ -7,6 +7,7 @@ import streamlit.components.v1 as components
 import time
 import random
 import os
+import json # <--- Data Save karnay ke liye
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(
@@ -16,51 +17,89 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. PERSISTENT LOGIN SYSTEM (THE MAGIC) ---
+# --- 2. PERSISTENT STORAGE SYSTEM (DATABASE) ---
+DATA_FILE = "life_os_data.json"
 AUTH_FILE = "auth_state.txt"
 
+def load_data():
+    """Loads data from the JSON file if it exists."""
+    if os.path.exists(DATA_FILE):
+        try:
+            with open(DATA_FILE, "r") as f:
+                return json.load(f)
+        except:
+            return None
+    return None
+
+def save_data():
+    """Saves current session state to JSON file."""
+    data = {
+        "goals": st.session_state.goals,
+        "habits": st.session_state.habits,
+        "balance": st.session_state.balance,
+        "transactions": st.session_state.transactions,
+        "water": st.session_state.water,
+        "xp": st.session_state.xp,
+        "level": st.session_state.level,
+        "user_name": st.session_state.user_name,
+        "currency": st.session_state.currency,
+        "timezone": st.session_state.timezone,
+        "notifications": st.session_state.notifications,
+        "journal_logs": st.session_state.journal_logs
+    }
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f)
+
+# --- 3. LOGIN SYSTEM ---
 def is_permanently_logged_in():
-    """Checks if the user has logged in before on this machine."""
     if os.path.exists(AUTH_FILE):
         with open(AUTH_FILE, "r") as f:
             return f.read().strip() == "LOGGED_IN"
     return False
 
 def set_permanent_login():
-    """Saves the login state permanently."""
     with open(AUTH_FILE, "w") as f:
         f.write("LOGGED_IN")
 
 def factory_reset_pro():
-    """Wipes everything including the login state."""
-    if os.path.exists(AUTH_FILE):
-        os.remove(AUTH_FILE) # Delete the login memory
+    if os.path.exists(AUTH_FILE): os.remove(AUTH_FILE)
+    if os.path.exists(DATA_FILE): os.remove(DATA_FILE) # Delete Data too
     st.session_state.clear()
     st.rerun()
 
-# --- 3. CRASH PROTECTION ---
-try:
-    if 'goals' not in st.session_state or not isinstance(st.session_state.goals, list):
-        st.session_state.goals = [{"text": "Deep Work", "done": False}]
-    if st.session_state.goals and not isinstance(st.session_state.goals[0], dict):
-        st.session_state.goals = [{"text": "Deep Work", "done": False}]
-    if 'habits' not in st.session_state or not isinstance(st.session_state.habits, list):
-        st.session_state.habits = [{"name": "Exercise", "streak": 0}]
-except Exception:
-    st.session_state.goals = [{"text": "Deep Work", "done": False}]
-    st.session_state.habits = [{"name": "Exercise", "streak": 0}]
+# --- 4. STATE INITIALIZATION (LOAD FROM FILE) ---
+# Pehlay saved data load karo
+saved_data = load_data()
 
-# --- 4. STATE INITIALIZATION ---
-if 'user_name' not in st.session_state: st.session_state.user_name = "Boss"
-if 'xp' not in st.session_state: st.session_state.xp = 0
-if 'level' not in st.session_state: st.session_state.level = 1
-if 'balance' not in st.session_state: st.session_state.balance = 0
-if 'water' not in st.session_state: st.session_state.water = 0
-if 'transactions' not in st.session_state: st.session_state.transactions = []
-if 'currency' not in st.session_state: st.session_state.currency = "PKR"
-if 'timezone' not in st.session_state: st.session_state.timezone = "Asia/Karachi"
-if 'notifications' not in st.session_state: st.session_state.notifications = True
-if 'journal_logs' not in st.session_state: st.session_state.journal_logs = []
+if saved_data:
+    # Agar file mili, to usay session mein daal do
+    if 'user_name' not in st.session_state: st.session_state.user_name = saved_data.get("user_name", "Boss")
+    if 'xp' not in st.session_state: st.session_state.xp = saved_data.get("xp", 0)
+    if 'level' not in st.session_state: st.session_state.level = saved_data.get("level", 1)
+    if 'balance' not in st.session_state: st.session_state.balance = saved_data.get("balance", 0)
+    if 'water' not in st.session_state: st.session_state.water = saved_data.get("water", 0)
+    if 'transactions' not in st.session_state: st.session_state.transactions = saved_data.get("transactions", [])
+    if 'goals' not in st.session_state: st.session_state.goals = saved_data.get("goals", [])
+    if 'habits' not in st.session_state: st.session_state.habits = saved_data.get("habits", [])
+    if 'currency' not in st.session_state: st.session_state.currency = saved_data.get("currency", "PKR")
+    if 'timezone' not in st.session_state: st.session_state.timezone = saved_data.get("timezone", "Asia/Karachi")
+    if 'notifications' not in st.session_state: st.session_state.notifications = saved_data.get("notifications", True)
+    if 'journal_logs' not in st.session_state: st.session_state.journal_logs = saved_data.get("journal_logs", [])
+else:
+    # Agar file nahi mili (First Time), to default values
+    if 'user_name' not in st.session_state: st.session_state.user_name = "Boss"
+    if 'xp' not in st.session_state: st.session_state.xp = 0
+    if 'level' not in st.session_state: st.session_state.level = 1
+    if 'balance' not in st.session_state: st.session_state.balance = 0
+    if 'water' not in st.session_state: st.session_state.water = 0
+    if 'transactions' not in st.session_state: st.session_state.transactions = []
+    if 'goals' not in st.session_state: st.session_state.goals = [{"text": "Deep Work", "done": False}]
+    if 'habits' not in st.session_state: st.session_state.habits = [{"name": "Exercise", "streak": 0}]
+    if 'currency' not in st.session_state: st.session_state.currency = "PKR"
+    if 'timezone' not in st.session_state: st.session_state.timezone = "Asia/Karachi"
+    if 'notifications' not in st.session_state: st.session_state.notifications = True
+    if 'journal_logs' not in st.session_state: st.session_state.journal_logs = []
+
 if 'run_effect' not in st.session_state: st.session_state.run_effect = None
 
 # --- 5. EFFECT RUNNER ---
@@ -83,7 +122,6 @@ def play_sound_and_wait(sound_type="pop"):
         "levelup": "https://www.soundjay.com/human/sounds/applause-01.mp3"
     }
     url = sounds.get(sound_type, sounds["pop"])
-    
     st.markdown(f"""
     <audio autoplay="true" style="display:none;">
     <source src="{url}" type="audio/mp3">
@@ -100,14 +138,13 @@ def check_level_up():
         play_sound_and_wait("levelup")
         st.session_state.run_effect = "balloons"
         st.toast(f"🎉 LEVEL UP! You are now Level {st.session_state.level}!", icon="🆙")
+    save_data() # <--- Save Progress
 
-# --- 7. ONE-TIME LOGIN CHECK ---
+# --- 7. ONE-TIME LOGIN ---
 def check_auth():
-    # 1. Check if already permanently logged in
     if is_permanently_logged_in():
         return True
     
-    # 2. If not, show login screen
     if "auth" not in st.session_state:
         try: users = st.secrets["users"]
         except: 
@@ -117,15 +154,15 @@ def check_auth():
         c1, c2, c3 = st.columns([1,2,1])
         with c2:
             st.markdown("## 🔐 One-Time Login")
-            st.info("Log in once, and stay logged in until Factory Reset.")
+            st.info("Data will be saved permanently on this device.")
             with st.form("Log"):
                 e = st.text_input("Email")
                 p = st.text_input("Password", type="password")
-                if st.form_submit_button("Authenticate Device"):
+                if st.form_submit_button("Verify Device"):
                     if e in users and users[e] == p:
                         st.session_state.auth = True
-                        set_permanent_login() # <--- SAVES LOGIN PERMANENTLY
-                        st.success("Device Verified! Redirecting...")
+                        set_permanent_login()
+                        st.success("Verified! Redirecting...")
                         time.sleep(1)
                         st.rerun()
                     else: st.error("❌ Invalid Credentials")
@@ -144,8 +181,6 @@ if check_auth():
     .card { background-color: #1A1C24; padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 15px; }
     .neon-text { font-size: 32px; font-weight: 800; color: #fff; text-shadow: 0 0 10px rgba(0, 255, 127, 0.5); }
     .stButton>button { width: 100%; border-radius: 12px; height: 50px; font-weight: 600; }
-    
-    /* CLOCK STYLE */
     .clock-box {
         text-align: center; padding: 15px;
         background: radial-gradient(circle, #222 0%, #000 100%);
@@ -160,7 +195,6 @@ if check_auth():
     except: tz = pytz.timezone('Asia/Karachi')
     pk_time = datetime.now(tz)
     
-    # --- SIDEBAR ---
     with st.sidebar:
         st.title(f"🚀 {st.session_state.user_name}")
         st.caption(f"Lvl {st.session_state.level} • {st.session_state.xp} XP")
@@ -172,39 +206,31 @@ if check_auth():
     if menu == "📊 Dashboard":
         t_str = pk_time.strftime('%I:%M %p')
         d_str = pk_time.strftime('%A, %d %B')
-        st.markdown(f"""
-        <div class="clock-box">
-            <div class="time-font">{t_str}</div>
-            <div style="color:#AAA;">{d_str}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
+        st.markdown(f"""<div class="clock-box"><div class="time-font">{t_str}</div><div style="color:#AAA;">{d_str}</div></div>""", unsafe_allow_html=True)
+        
         hr = pk_time.hour
         greet = "Morning" if 5<=hr<12 else "Afternoon" if 12<=hr<17 else "Evening" if 17<=hr<21 else "Night"
         st.markdown(f"### Good {greet}! 👋")
         
-        quotes = ["Focus on the process.", "Discipline is freedom.", "One Day or Day One?"]
-        st.info(f"💡 {random.choice(quotes)}")
+        st.info(f"💡 {random.choice(['Focus on the process.', 'Discipline is freedom.', 'Keep grinding.'])}")
 
         c1, c2 = st.columns(2)
         with c1:
             st.markdown(f"<div class='card'><h5>💰 Balance</h5><div class='neon-text' style='color:#00FF7F;'>{st.session_state.currency} {st.session_state.balance}</div></div>", unsafe_allow_html=True)
         with c2:
-            try:
-                pending = sum(1 for g in st.session_state.goals if not g.get('done', False))
-            except:
-                pending = 0
+            try: pending = sum(1 for g in st.session_state.goals if not g.get('done', False))
+            except: pending = 0
             st.markdown(f"<div class='card'><h5>🎯 Pending</h5><div class='neon-text' style='color:#FF4500;'>{pending}</div></div>", unsafe_allow_html=True)
 
     # === FOCUS ===
     elif menu == "🎯 Focus":
         st.title("Missions 🎯")
-        
         with st.expander("➕ Add Goal", expanded=False):
             new_g = st.text_input("Goal Name")
             if st.button("Add"):
                 if new_g:
                     st.session_state.goals.append({'text': new_g, 'done': False})
+                    save_data() # SAVE
                     st.rerun()
 
         st.markdown("<div class='card'>", unsafe_allow_html=True)
@@ -212,7 +238,7 @@ if check_auth():
             for i, g in enumerate(st.session_state.goals):
                 c1, c2, c3 = st.columns([1, 6, 1])
                 with c1:
-                    chk = st.checkbox("", value=g.get('done', False), key=f"goal_check_{i}")
+                    chk = st.checkbox("", value=g.get('done', False), key=f"g_chk_{i}")
                     if chk != g.get('done', False):
                         st.session_state.goals[i]['done'] = chk
                         if chk:
@@ -220,15 +246,16 @@ if check_auth():
                             check_level_up()
                             play_sound_and_wait("win")
                             st.session_state.run_effect = "balloons"
-                            st.rerun()
+                        save_data() # SAVE
+                        st.rerun()
                 with c2:
-                    st.session_state.goals[i]['text'] = st.text_input(f"g_t{i}", g.get('text', ''), label_visibility="collapsed")
+                    st.session_state.goals[i]['text'] = st.text_input(f"g_t{i}", g.get('text',''), label_visibility="collapsed")
                 with c3:
                     if st.button("🗑️", key=f"del_g{i}"):
                         st.session_state.goals.pop(i)
+                        save_data() # SAVE
                         st.rerun()
-        else:
-            st.info("No goals yet.")
+        else: st.info("No goals.")
         st.markdown("</div>", unsafe_allow_html=True)
 
     # === WALLET ===
@@ -236,20 +263,13 @@ if check_auth():
         curr = st.session_state.currency
         val = st.session_state.balance
         color = "#00FF7F" if val >= 0 else "#FF4500"
-        
         st.markdown(f"<div class='card' style='text-align:center;'><h5 style='margin:0;'>Balance</h5><h1 style='color:{color}; font-size:42px; margin:0;'>{curr} {val}</h1></div>", unsafe_allow_html=True)
 
         tab1, tab2, tab3 = st.tabs(["Add", "History", "Charts"])
-        
-        income_cats = ["Salary", "Freelance", "Business", "Gift"]
-        expense_cats = ["Food", "Rent", "Fuel", "Shopping", "Bills", "Fun"]
-
         with tab1:
             typ = st.radio("Type", ["Expense 🔴", "Income 🟢"], horizontal=True)
             with st.form("money"):
-                if "Income" in typ: cat = st.selectbox("Source", income_cats)
-                else: cat = st.selectbox("Category", expense_cats)
-                
+                cat = st.selectbox("Category", ["Salary", "Freelance", "Gift"] if "Income" in typ else ["Food", "Rent", "Fuel", "Shopping", "Bills", "Fun"])
                 item = st.text_input("Description")
                 amt = st.number_input("Amount", min_value=1)
                 
@@ -257,47 +277,43 @@ if check_auth():
                     real_amt = amt if "Income" in typ else -amt
                     st.session_state.balance += real_amt
                     st.session_state.transactions.append({
-                        "Date": str(pk_time.date()), "Item": item, "Amt": abs(amt), 
-                        "Type": "Expense" if "Expense" in typ else "Income", "Cat": cat
+                        "Date": str(pk_time.date()), "Item": item, "Amt": abs(amt), "Type": "Expense" if "Expense" in typ else "Income", "Cat": cat
                     })
                     st.session_state.xp += 10
                     check_level_up()
                     play_sound_and_wait("cash")
                     st.session_state.run_effect = "snow"
+                    save_data() # SAVE
                     st.rerun()
         
         with tab2:
-            if st.session_state.transactions:
-                df = pd.DataFrame(st.session_state.transactions[::-1])
-                st.dataframe(df, use_container_width=True)
+            if st.session_state.transactions: st.dataframe(pd.DataFrame(st.session_state.transactions[::-1]), use_container_width=True)
             else: st.info("No history.")
-
         with tab3:
             if st.session_state.transactions:
                 df = pd.DataFrame(st.session_state.transactions)
                 df_ex = df[df["Type"] == "Expense"]
-                if not df_ex.empty:
-                    fig = px.pie(df_ex, values='Amt', names='Cat', title="Expenses", hole=0.5)
-                    st.plotly_chart(fig, use_container_width=True)
+                if not df_ex.empty: st.plotly_chart(px.pie(df_ex, values='Amt', names='Cat', title="Expenses", hole=0.5), use_container_width=True)
             else: st.info("No data.")
 
     # === HABITS ===
     elif menu == "💪 Habits":
         st.title("Habits 🌱")
-        
         st.markdown("<div class='card'><h4>💧 Hydration</h4>", unsafe_allow_html=True)
         st.progress(min(st.session_state.water / 8, 1.0))
         st.caption(f"{st.session_state.water}/8 Glasses")
-        c1, c2, c3 = st.columns([1, 1, 3])
+        c1, c2 = st.columns([1, 4])
         if c1.button("➕ Drink"):
             if st.session_state.water < 8:
                 st.session_state.water += 1
                 play_sound_and_wait("pop")
                 st.session_state.run_effect = "snow"
+                save_data() # SAVE
                 st.rerun()
         if c2.button("➖ Undo"):
             if st.session_state.water > 0:
                 st.session_state.water -= 1
+                save_data() # SAVE
                 st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -307,6 +323,7 @@ if check_auth():
         if c_btn.button("Add"):
             if nh:
                 st.session_state.habits.append({"name": nh, "streak": 0})
+                save_data() # SAVE
                 st.rerun()
                 
         if st.session_state.habits:
@@ -314,25 +331,26 @@ if check_auth():
                 c_x, c_y, c_z, c_del = st.columns([3, 1, 1, 0.5])
                 c_x.markdown(f"**{h.get('name','Habit')}**")
                 c_y.metric("Streak", f"{h.get('streak',0)} 🔥")
-                if c_z.button("Done", key=f"habit_done_{i}"):
+                if c_z.button("Done", key=f"h_d_{i}"):
                     st.session_state.habits[i]['streak'] += 1
                     st.session_state.xp += 15
                     check_level_up()
                     play_sound_and_wait("pop")
                     st.session_state.run_effect = "snow"
+                    save_data() # SAVE
                     st.rerun()
                 if c_del.button("x", key=f"del_h{i}"):
                     st.session_state.habits.pop(i)
+                    save_data() # SAVE
                     st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
     # === JOURNAL ===
     elif menu == "📝 Journal":
         st.title("Journal 📔")
-        
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         c_m, c_s = st.columns(2)
-        mood = c_m.selectbox("Mood", ["Happy 🙂", "Calm 😌", "Stressed 😫", "Sad 😢", "Angry 😠"])
+        mood = c_m.selectbox("Mood", ["Happy 🙂", "Calm 😌", "Stressed 😫", "Sad 😢"])
         sleep = c_s.selectbox("Sleep", ["8+ Hours 💤", "6-7 Hours", "4-5 Hours", "Less than 4"])
         gratitude = st.text_area("Gratitude", placeholder="I am grateful for...")
         
@@ -343,6 +361,7 @@ if check_auth():
             check_level_up()
             play_sound_and_wait("win")
             st.session_state.run_effect = "balloons"
+            save_data() # SAVE
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
         
@@ -350,7 +369,7 @@ if check_auth():
             st.write("### Past Entries")
             st.dataframe(pd.DataFrame(st.session_state.journal_logs[::-1]), use_container_width=True)
 
-    # === SETTINGS (WITH FACTORY RESET) ===
+    # === SETTINGS ===
     elif menu == "⚙️ Settings":
         st.title("Settings")
         st.markdown("<div class='card'>", unsafe_allow_html=True)
@@ -358,21 +377,22 @@ if check_auth():
         new_n = st.text_input("Display Name", value=st.session_state.user_name)
         if st.button("Update Name"):
             st.session_state.user_name = new_n
+            save_data()
             st.rerun()
             
         new_curr = st.text_input("Currency", value=st.session_state.currency)
         if st.button("Save Currency"):
             st.session_state.currency = new_curr
+            save_data()
             st.rerun()
             
         tz_list = ["Asia/Karachi", "Asia/Dubai", "Europe/London", "America/New_York"]
         new_tz = st.selectbox("Timezone", tz_list, index=0)
         if st.button("Save Timezone"):
             st.session_state.timezone = new_tz
+            save_data()
             st.rerun()
             
         st.markdown("</div>", unsafe_allow_html=True)
-        
-        st.warning("⚠️ Danger Zone")
-        if st.button("🔴 Factory Reset (Logout & Clear Data)"):
-            factory_reset_pro() # <--- RESETS EVERYTHING & LOGS OUT
+        if st.button("🔴 Factory Reset (Clear All Data)"):
+            factory_reset_pro()
