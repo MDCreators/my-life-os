@@ -9,15 +9,15 @@ import time
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Life OS", page_icon="🌸", layout="centered")
 
-# --- 🎵 SOUND SYSTEM (DELAY FIX) ---
+# --- 🎵 SOUND SYSTEM ---
 def play_sound_and_wait(sound_type="pop"):
-    # 1. Vibration
+    # Vibration
     vibrate_js = """<script>
     if (navigator.vibrate) { navigator.vibrate([200]); }
     </script>"""
     components.html(vibrate_js, height=0, width=0)
     
-    # 2. Sound URLs
+    # Sound
     sounds = {
         "win": "https://www.soundjay.com/misc/sounds/magic-chime-01.mp3",
         "cash": "https://www.soundjay.com/misc/sounds/coins-in-hand-2.mp3",
@@ -26,7 +26,7 @@ def play_sound_and_wait(sound_type="pop"):
     }
     url = sounds.get(sound_type, sounds["pop"])
     
-    # 3. Audio Player
+    # Player
     sound_html = f"""
     <audio autoplay="true" style="display:none;">
     <source src="{url}" type="audio/mp3">
@@ -34,7 +34,7 @@ def play_sound_and_wait(sound_type="pop"):
     """
     st.markdown(sound_html, unsafe_allow_html=True)
     
-    # 4. WAIT FOR SOUND
+    # Wait
     time.sleep(1.2) 
 
 # --- SESSION STATE ---
@@ -45,8 +45,6 @@ if 'expenses' not in st.session_state: st.session_state.expenses = []
 if 'life_score' not in st.session_state: st.session_state.life_score = 0
 if 'habits' not in st.session_state: 
     st.session_state.habits = [{"name": "Exercise", "streak": 0}, {"name": "Prayers", "streak": 0}]
-
-# --- FIX: 3 GOALS RESTORED ---
 if 'goals' not in st.session_state:
     st.session_state.goals = [
         {"text": "Goal 1", "done": False}, 
@@ -83,11 +81,9 @@ def check_password():
 # --- MAIN APP ---
 if check_password():
     
-    # Time
     pk_tz = pytz.timezone('Asia/Karachi')
     pk_time = datetime.now(pk_tz)
     
-    # CSS
     st.markdown("""
         <style>
         .stApp { background-color: #0E1117; color: white; }
@@ -101,10 +97,10 @@ if check_password():
     st.markdown(f"<h1 style='text-align: center;'>Hi, {st.session_state.user_name}! 🌙</h1>", unsafe_allow_html=True)
     st.markdown(f"<div class='big-score'>🌟 Life Score: {st.session_state.life_score} XP</div>", unsafe_allow_html=True)
     
-    # --- FIX: SETUP TAB MOVED TO START ---
+    # Tabs
     t_set, t1, t2, t3, t4 = st.tabs(["⚙️ Setup", "🏠 Hub", "✅ Habits", "💰 Finance", "🌿 Care"])
 
-    # 1. SETUP (First Tab)
+    # 1. SETUP
     with t_set:
         st.write("### Profile Settings")
         nn = st.text_input("Name", value=st.session_state.user_name)
@@ -163,12 +159,19 @@ if check_password():
                 st.session_state.habits.pop(i)
                 st.rerun()
 
-    # 4. FINANCE
+    # 4. FINANCE (FIXED COLORS & HISTORY)
     with t3:
-        st.metric("Savings", f"PKR {st.session_state.total_savings}")
-        ta, tb = st.tabs(["📝 Transaction", "📊 Analytics"])
+        st.write("### Wallet 💰")
         
-        # FULL CATEGORIES
+        # --- COLOR LOGIC FIXED HERE ---
+        val = st.session_state.total_savings
+        color = "#00FF7F" if val >= 0 else "#FF4500" # Green if +, Red if -
+        st.markdown(f"<h1 style='text-align: center; color: {color};'>PKR {val}</h1>", unsafe_allow_html=True)
+        # ------------------------------
+        
+        # 3 TABS WAPIS AA GAYE
+        ta, tb, tc = st.tabs(["📝 Add", "📊 Charts", "📜 History"])
+        
         exp_cats = ["🍔 Food", "🏠 Rent", "🚗 Fuel", "🛍️ Shopping", "💡 Bills", "💊 Medical", "🎓 Fees", "🎉 Fun", "✈️ Travel", "🎁 Gifts", "💸 Debt", "📝 Other"]
         inc_cats = ["💼 Salary", "💻 Freelance", "📈 Business", "🎁 Gift", "💰 Bonus", "🤝 Side Hustle"]
 
@@ -217,9 +220,15 @@ if check_password():
                     if not df_in.empty:
                         fig2 = px.pie(df_in, values='Amount', names='Category', hole=0.4)
                         st.plotly_chart(fig2, use_container_width=True)
-                st.dataframe(df)
             else:
                 st.info("No data yet.")
+
+        # --- HISTORY TAB (RESTORED) ---
+        with tc:
+            if st.session_state.expenses:
+                st.dataframe(pd.DataFrame(st.session_state.expenses), use_container_width=True)
+            else:
+                st.info("No transactions found.")
 
     # 5. CARE
     with t4:
