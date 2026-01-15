@@ -6,7 +6,11 @@ import pytz
 import streamlit.components.v1 as components 
 
 # --- 1. CONFIGURATION ---
-st.set_page_config(page_title="Life OS", page_icon="🌸", layout="centered")
+st.set_page_config(
+    page_title="Life OS", 
+    page_icon="🌸", 
+    layout="centered"
+)
 
 # --- SOUND & VIBRATION ---
 def trigger_feedback():
@@ -19,16 +23,28 @@ def trigger_feedback():
     """
     components.html(vibrate_js, height=0, width=0)
     # Sound
-    st.audio("https://www.soundjay.com/buttons/sounds/button-3.mp3", format="audio/mp3", autoplay=True)
+    st.audio(
+        "https://www.soundjay.com/buttons/sounds/button-3.mp3", 
+        format="audio/mp3", 
+        autoplay=True
+    )
 
 # --- SESSION STATE ---
-if 'user_name' not in st.session_state: st.session_state.user_name = "User"
-if 'water_count' not in st.session_state: st.session_state.water_count = 0
-if 'total_savings' not in st.session_state: st.session_state.total_savings = 0 
-if 'expenses' not in st.session_state: st.session_state.expenses = []
-if 'life_score' not in st.session_state: st.session_state.life_score = 0
+if 'user_name' not in st.session_state: 
+    st.session_state.user_name = "User"
+if 'water_count' not in st.session_state: 
+    st.session_state.water_count = 0
+if 'total_savings' not in st.session_state: 
+    st.session_state.total_savings = 0 
+if 'expenses' not in st.session_state: 
+    st.session_state.expenses = []
+if 'life_score' not in st.session_state: 
+    st.session_state.life_score = 0
 if 'habits' not in st.session_state: 
-    st.session_state.habits = [{"name": "Exercise", "streak": 0}, {"name": "Prayers", "streak": 0}]
+    st.session_state.habits = [
+        {"name": "Exercise", "streak": 0}, 
+        {"name": "Prayers", "streak": 0}
+    ]
 if 'goals' not in st.session_state:
     st.session_state.goals = [
         {"text": "Goal 1", "done": False},
@@ -43,12 +59,12 @@ def check_password():
             users = st.secrets["users"]
         except:
             st.warning("⚠️ Access Control Error: Add [users] to Secrets.")
-            # Temporary bypass for setup
             
         with st.form("Login"):
             st.markdown("## 🔐 Paid Member Login")
             email = st.text_input("Email")
             password = st.text_input("Password", type="password")
+            
             if st.form_submit_button("Login"):
                 if 'users' in locals() and email in users and users[email] == password:
                     st.session_state["authenticated"] = True
@@ -72,10 +88,29 @@ if check_password():
     st.markdown("""
         <style>
         .stApp { background-color: #0E1117; color: #FAFAFA; }
-        .stButton>button { color: white !important; background-color: #FF1493 !important; border-radius: 12px; border: none; font-weight: bold; }
-        .stTextInput>div>div>input { background-color: #262730; color: white !important; border-radius: 10px; }
-        .big-score { font-size: 24px; font-weight: bold; color: #00FF7F; text-align: center; }
-        .streak-num { font-size: 26px; font-weight: bold; color: #00BFFF; }
+        .stButton>button { 
+            color: white !important; 
+            background-color: #FF1493 !important; 
+            border-radius: 12px; 
+            border: none; 
+            font-weight: bold; 
+        }
+        .stTextInput>div>div>input { 
+            background-color: #262730; 
+            color: white !important; 
+            border-radius: 10px; 
+        }
+        .big-score { 
+            font-size: 24px; 
+            font-weight: bold; 
+            color: #00FF7F; 
+            text-align: center; 
+        }
+        .streak-num { 
+            font-size: 26px; 
+            font-weight: bold; 
+            color: #00BFFF; 
+        }
         audio { display: none; }
         </style>
         """, unsafe_allow_html=True)
@@ -110,7 +145,6 @@ if check_password():
         st.progress(progress_val)
         st.caption(f"Progress: {int(progress_val*100)}% Completed")
         
-        # --- FIXED LINE HERE ---
         for i, goal in enumerate(st.session_state.goals):
             c1, c2 = st.columns([1, 8])
             with c1:
@@ -127,7 +161,12 @@ if check_password():
                          st.session_state.life_score -= 10
                          st.rerun()
             with c2:
-                st.session_state.goals[i]['text'] = st.text_input(f"G{i}", goal['text'], label_visibility="collapsed")
+                # SAFE INPUT (Broken lines)
+                st.session_state.goals[i]['text'] = st.text_input(
+                    f"G{i}", 
+                    goal['text'], 
+                    label_visibility="collapsed"
+                )
 
         st.divider()
         st.subheader("Hydration 💧")
@@ -139,4 +178,12 @@ if check_password():
     with tab2:
         st.subheader("Habit Tracker ✨")
         c_in, c_btn = st.columns([3, 1])
-        with c_in: new_h = st.text_input("New Habit", label_visibility="collapsed
+        with c_in: 
+            # SAFE INPUT (Broken lines)
+            new_h = st.text_input(
+                "New Habit", 
+                label_visibility="collapsed"
+            )
+        with c_btn: 
+            if st.button("➕"):
+                if new
