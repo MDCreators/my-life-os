@@ -7,7 +7,7 @@ import streamlit.components.v1 as components
 import time
 import random
 
-# --- 1. CONFIG ---
+# --- 1. CONFIGURATION ---
 st.set_page_config(
     page_title="Life OS Pro", 
     page_icon="⚡", 
@@ -15,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. AUTO-FIXER (PREVENTS CRASHES) ---
+# --- 🛠️ AUTO-FIXER ---
 if 'goals' in st.session_state:
     fixed_goals = []
     for g in st.session_state.goals:
@@ -32,27 +32,11 @@ if 'habits' in st.session_state:
         fixed_habits.append({'name': n, 'streak': s})
     st.session_state.habits = fixed_habits
 
-# --- 3. NOTIFICATION SYSTEM ---
-def inject_notification_system():
-    # Browser Notification Logic
-    js = """
-    <script>
-    if (!("Notification" in window)) {
-        console.log("Not supported");
-    } else {
-        Notification.requestPermission();
-    }
-    </script>
-    """
-    components.html(js, height=0, width=0)
-
-# --- 4. SOUND SYSTEM ---
+# --- 🎵 SOUND SYSTEM ---
 def play_sound_and_wait(sound_type="pop"):
-    # Vibration
-    vcode = """<script>if(navigator.vibrate){navigator.vibrate([200]);}</script>"""
-    components.html(vcode, height=0, width=0)
+    vibrate_js = """<script>if(navigator.vibrate){navigator.vibrate([200]);}</script>"""
+    components.html(vibrate_js, height=0, width=0)
     
-    # Sounds
     sounds = {
         "win": "https://www.soundjay.com/misc/sounds/magic-chime-01.mp3",
         "cash": "https://www.soundjay.com/misc/sounds/coins-in-hand-2.mp3",
@@ -61,7 +45,6 @@ def play_sound_and_wait(sound_type="pop"):
     }
     url = sounds.get(sound_type, sounds["pop"])
     
-    # Audio Player
     st.markdown(f"""
     <audio autoplay="true" style="display:none;">
     <source src="{url}" type="audio/mp3">
@@ -69,7 +52,7 @@ def play_sound_and_wait(sound_type="pop"):
     """, unsafe_allow_html=True)
     time.sleep(0.8)
 
-# --- 5. STATE INIT ---
+# --- STATE MANAGEMENT ---
 if 'user_name' not in st.session_state: st.session_state.user_name = "Boss"
 if 'xp' not in st.session_state: st.session_state.xp = 0
 if 'level' not in st.session_state: st.session_state.level = 1
@@ -89,12 +72,12 @@ def check_level_up():
         play_sound_and_wait("levelup")
         st.balloons()
 
-# --- 6. LOGIN ---
+# --- LOGIN ---
 def check_auth():
     if "auth" not in st.session_state:
         try: users = st.secrets["users"]
         except: 
-            st.warning("⚠️ Add [users] to Secrets")
+            st.warning("⚠️ Setup Secrets")
             return False
         
         c1, c2, c3 = st.columns([1,2,1])
@@ -111,33 +94,20 @@ def check_auth():
         return False
     return True
 
-# --- 7. MAIN APP ---
+# --- APP ---
 if check_auth():
     
-    # Notifications
-    if st.session_state.notifications:
-        inject_notification_system()
-
-    # CSS Styles
+    # CSS Styling
     st.markdown("""
     <style>
     .stApp { background-color: #0E1117; }
     .card { background-color: #1E1E1E; padding: 15px; border-radius: 12px; border: 1px solid #333; margin-bottom: 10px; }
     .stButton>button { width: 100%; border-radius: 10px; height: 45px; }
-    
-    /* GIANT CLOCK */
-    .clock-container {
-        text-align: center; padding: 20px;
-        background: radial-gradient(circle, #222 0%, #000 100%);
-        border-radius: 15px; border: 2px solid #FF1493;
-        box-shadow: 0 0 20px rgba(255, 20, 147, 0.4); margin-bottom: 20px;
-    }
-    .time-text { font-size: 50px; font-weight: 900; color: #FFF; font-family: monospace; }
-    .date-text { font-size: 16px; color: #AAA; }
+    /* Water Bar Style */
+    .stProgress > div > div > div > div { background-color: #00BFFF; }
     </style>
     """, unsafe_allow_html=True)
 
-    # Time Setup
     try: tz = pytz.timezone(st.session_state.timezone)
     except: tz = pytz.timezone('Asia/Karachi')
     pk_time = datetime.now(tz)
@@ -145,59 +115,44 @@ if check_auth():
     # --- SIDEBAR ---
     with st.sidebar:
         st.title(f"🚀 {st.session_state.user_name}")
-        
-        # Level Badge
-        st.markdown(f"""
-        <div style="background: linear-gradient(45deg, #FF1493, #9d00ff); padding: 15px; border-radius: 10px; text-align: center;">
-            <h3 style="margin:0; color:white;">Lvl {st.session_state.level}</h3>
-            <p style="margin:0; color:white;">{st.session_state.xp} / {st.session_state.level * 100} XP</p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"**Lvl {st.session_state.level}** • {st.session_state.xp} XP")
         st.progress(st.session_state.xp / (st.session_state.level * 100))
-        
         st.write("---")
         menu = st.radio("Menu", ["📊 Dashboard", "🎯 Focus", "💰 Wallet", "💪 Habits", "⚙️ Settings"])
 
     # === DASHBOARD ===
     if menu == "📊 Dashboard":
-        # Clock
-        t_str = pk_time.strftime('%I:%M %p')
-        d_str = pk_time.strftime('%A, %d %B')
-        st.markdown(f"""
-        <div class="clock-container">
-            <div class="time-text">{t_str}</div>
-            <div class="date-text">{d_str}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Greeting
-        hr = pk_time.hour
-        greet = "Morning" if 5<=hr<12 else "Afternoon" if 12<=hr<17 else "Evening" if 17<=hr<21 else "Night"
-        st.markdown(f"### Good {greet}, Boss! 👋")
-        
+        st.title("Dashboard 📊")
         c1, c2 = st.columns(2)
         with c1:
-            st.markdown(f"<div class='card'><h6>💰 Savings</h6><h3>{st.session_state.currency} {st.session_state.balance}</h3></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='card'><h6>💰 Balance</h6><h3>{st.session_state.currency} {st.session_state.balance}</h3></div>", unsafe_allow_html=True)
         with c2:
             pending = sum(1 for g in st.session_state.goals if not g['done'])
-            st.markdown(f"<div class='card'><h6>🎯 Pending</h6><h3>{pending} Goals</h3></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='card'><h6>🎯 Pending Goals</h6><h3>{pending}</h3></div>", unsafe_allow_html=True)
         
-        if st.button("🔔 Test Alert"):
-            st.components.v1.html("""<script>new Notification("⚡ Life OS", { body: "Test Successful!" });</script>""", height=0, width=0)
-            st.toast("Check Notification!")
+        # Water Bar Preview
+        st.markdown(f"<div class='card'><h6>💧 Hydration Status</h6>", unsafe_allow_html=True)
+        st.progress(min(st.session_state.water / 8, 1.0))
+        st.caption(f"{st.session_state.water} / 8 Glasses")
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    # === FOCUS ===
+    # === FOCUS (GOALS) ===
     elif menu == "🎯 Focus":
         st.title("Daily Missions 🎯")
         
-        # Goals
-        done_c = sum(1 for g in st.session_state.goals if g['done'])
-        total_c = len(st.session_state.goals)
-        if total_c > 0: st.progress(done_c/total_c)
-        
+        # Add New Goal
+        with st.expander("➕ Add New Goal", expanded=False):
+            new_g = st.text_input("Goal Name", placeholder="e.g. Read 10 Pages")
+            if st.button("Add Goal"):
+                if new_g:
+                    st.session_state.goals.append({'text': new_g, 'done': False})
+                    play_sound_and_wait("pop")
+                    st.rerun()
+
+        # Goals List
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         for i, g in enumerate(st.session_state.goals):
-            c1, c2 = st.columns([1, 6])
+            c1, c2, c3 = st.columns([1, 6, 1])
             with c1:
                 chk = st.checkbox("", value=g['done'], key=f"g{i}")
                 if chk != g['done']:
@@ -208,41 +163,44 @@ if check_auth():
                         play_sound_and_wait("win")
                         st.rerun()
             with c2:
+                # Text is editable
                 st.session_state.goals[i]['text'] = st.text_input(f"g_t{i}", g['text'], label_visibility="collapsed")
+            with c3:
+                if st.button("🗑️", key=f"del_g{i}"):
+                    st.session_state.goals.pop(i)
+                    st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
-        
-        # Pomodoro (FIXED SECTION)
-        with st.expander("🍅 Pomodoro Timer"):
-            c_t1, c_t2, c_t3 = st.columns(3)
-            with c_t2:
-                if st.button("▶ Start 25 Mins"):
-                    timer_placeholder = st.empty() # SAFE METHOD
-                    for seconds in range(1500, 0, -1):
-                        mins, secs = divmod(seconds, 60)
-                        timer_placeholder.metric("Focus Time", f"{mins:02d}:{secs:02d}")
-                        time.sleep(1)
-                    st.success("Time's Up! Take a break.")
-                    play_sound_and_wait("win")
 
-    # === WALLET ===
+    # === WALLET (FINANCE) ===
     elif menu == "💰 Wallet":
         curr = st.session_state.currency
-        st.title(f"Wallet ({curr}) 💸")
-        
         val = st.session_state.balance
         clr = "#00FF00" if val >= 0 else "#FF0000"
-        st.markdown(f"<div style='text-align:center; padding:10px; background:#111; border-radius:10px;'><h1 style='color:{clr}; margin:0;'>{curr} {val}</h1></div>", unsafe_allow_html=True)
         
-        tab1, tab2 = st.tabs(["Add", "Stats"])
+        st.markdown(f"<div style='text-align:center; padding:10px; background:#111; border-radius:10px;'><h1 style='color:{clr}; margin:0;'>{curr} {val}</h1></div>", unsafe_allow_html=True)
+        st.write("")
+
+        tab1, tab2, tab3 = st.tabs(["➕ Add Transaction", "📜 History", "📊 Analytics"])
+        
+        # --- SMART CATEGORIES ---
+        income_cats = ["💼 Salary", "💻 Freelance", "📈 Business", "🎁 Gift", "💰 Bonus", "🤝 Side Hustle"]
+        expense_cats = ["🍔 Food", "🏠 Rent", "🚗 Fuel", "🛍️ Shopping", "💡 Bills", "💊 Medical", "🎉 Fun", "✈️ Travel", "🎓 Education"]
+
         with tab1:
             with st.form("money"):
-                item = st.text_input("Item")
-                c_amt, c_cat = st.columns(2)
-                amt = c_amt.number_input("Amount", min_value=1)
-                cat = c_cat.selectbox("Cat", ["Food", "Rent", "Fuel", "Shopping", "Salary", "Biz"])
-                typ = st.radio("Type", ["Expense 🔴", "Income 🟢"], horizontal=True)
+                c_typ, c_cat = st.columns(2)
+                typ = c_typ.radio("Type", ["Expense 🔴", "Income 🟢"], horizontal=True)
                 
-                if st.form_submit_button("Save"):
+                # Dynamic Category Selection based on Type
+                if "Income" in typ:
+                    cat = c_cat.selectbox("Category", income_cats)
+                else:
+                    cat = c_cat.selectbox("Category", expense_cats)
+                
+                item = st.text_input("Description (Optional)")
+                amt = st.number_input("Amount", min_value=1)
+                
+                if st.form_submit_button("Save Transaction"):
                     real_amt = amt if "Income" in typ else -amt
                     st.session_state.balance += real_amt
                     st.session_state.transactions.append({
@@ -253,62 +211,86 @@ if check_auth():
                     check_level_up()
                     play_sound_and_wait("cash")
                     st.rerun()
+        
         with tab2:
+            st.subheader("Transaction History 📜")
+            if st.session_state.transactions:
+                # Show latest first
+                df = pd.DataFrame(st.session_state.transactions[::-1])
+                st.dataframe(df, use_container_width=True)
+            else:
+                st.info("No history yet.")
+
+        with tab3:
             if st.session_state.transactions:
                 df = pd.DataFrame(st.session_state.transactions)
-                st.dataframe(df, use_container_width=True)
                 df_ex = df[df["Type"] == "Expense"]
                 if not df_ex.empty:
-                    fig = px.pie(df_ex, values='Amt', names='Cat', title="Expenses", hole=0.5)
+                    fig = px.pie(df_ex, values='Amt', names='Cat', title="Expenses Breakdown", hole=0.5)
                     st.plotly_chart(fig, use_container_width=True)
             else:
                 st.info("No data.")
 
-    # === HABITS ===
+    # === HABITS & WATER ===
     elif menu == "💪 Habits":
         st.title("Habits & Water 🌱")
         
-        st.markdown("<div class='card'><h4>💧 Water</h4>", unsafe_allow_html=True)
-        cols = st.columns(4)
-        for i in range(4):
-             if cols[i].button(f"{'🟦' if st.session_state.water > i else '⬜'}", key=f"w1_{i}"):
-                 if st.session_state.water <= i:
-                     st.session_state.water += 1
-                     play_sound_and_wait("pop")
-                     st.rerun()
-        cols2 = st.columns(4)
-        for i in range(4):
-             if cols2[i].button(f"{'🟦' if st.session_state.water > i+4 else '⬜'}", key=f"w2_{i}"):
-                 if st.session_state.water <= i+4:
-                     st.session_state.water += 1
-                     play_sound_and_wait("pop")
-                     st.rerun()
+        # --- WATER BAR ---
+        st.markdown("<div class='card'><h4>💧 Hydration Tracker</h4>", unsafe_allow_html=True)
+        
+        # The Bar
+        progress_val = min(st.session_state.water / 8, 1.0)
+        st.progress(progress_val)
+        st.caption(f"Progress: {st.session_state.water} / 8 Glasses")
+        
+        # Buttons
+        c1, c2, c3 = st.columns([1, 1, 3])
+        if c1.button("➕ Drink"):
+            if st.session_state.water < 8:
+                st.session_state.water += 1
+                play_sound_and_wait("pop")
+                st.rerun()
+        if c2.button("➖ Undo"):
+            if st.session_state.water > 0:
+                st.session_state.water -= 1
+                st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown("<div class='card'><h4>🔥 Streaks</h4>", unsafe_allow_html=True)
-        nh = st.text_input("New Habit", placeholder="Type & Enter")
-        if st.button("Add"):
+        # --- HABIT STREAKS ---
+        st.markdown("<div class='card'><h4>🔥 Habit Streaks</h4>", unsafe_allow_html=True)
+        
+        c_in, c_btn = st.columns([3, 1])
+        nh = c_in.text_input("New Habit", placeholder="Type habit name...", label_visibility="collapsed")
+        if c_btn.button("Add"):
             if nh:
                 st.session_state.habits.append({"name": nh, "streak": 0})
                 st.rerun()
                 
         for i, h in enumerate(st.session_state.habits):
-            c_x, c_y, c_z = st.columns([4, 2, 2])
-            c_x.write(f"**{h['name']}**")
-            c_y.write(f"🔥 {h['streak']}")
-            if c_z.button("✅", key=f"h_{i}"):
+            c_x, c_y, c_z, c_del = st.columns([3, 1, 1, 0.5])
+            c_x.markdown(f"**{h['name']}**")
+            
+            # Metric for Satisfaction
+            c_y.metric("Streak", f"{h['streak']} 🔥")
+            
+            if c_z.button("Mark Done", key=f"h_{i}"):
                 st.session_state.habits[i]['streak'] += 1
                 st.session_state.xp += 15
                 check_level_up()
                 play_sound_and_wait("pop")
+                st.snow() # Satisfying visual
+                st.rerun()
+            
+            if c_del.button("x", key=f"del_h{i}"):
+                st.session_state.habits.pop(i)
                 st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
     # === SETTINGS ===
     elif menu == "⚙️ Settings":
         st.title("Settings ⚙️")
-        
         st.markdown("<div class='card'>", unsafe_allow_html=True)
+        
         notif = st.toggle("Browser Notifications", value=st.session_state.notifications)
         if notif != st.session_state.notifications:
             st.session_state.notifications = notif
@@ -319,20 +301,13 @@ if check_auth():
             st.session_state.currency = new_curr
             st.rerun()
             
-        st.write("---")
         tz_list = ["Asia/Karachi", "Asia/Dubai", "Europe/London", "America/New_York"]
         new_tz = st.selectbox("Timezone", tz_list, index=0)
         if st.button("Save Timezone"):
             st.session_state.timezone = new_tz
             st.rerun()
             
-        st.write("---")
-        new_n = st.text_input("Name", value=st.session_state.user_name)
-        if st.button("Update Name"):
-            st.session_state.user_name = new_n
-            st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
-        
-        if st.button("🔴 Reset App"):
+        if st.button("🔴 Factory Reset App"):
             st.session_state.clear()
             st.rerun()
