@@ -11,27 +11,36 @@ import json
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# --- 0. LOGIN SYSTEM ---
+# --- 0. LOGIN SYSTEM (FIXED) ---
 def check_password():
     """Returns `True` if the user had a correct password."""
+    
     def password_entered():
+        # Check if password matches
         if st.session_state["username"] in st.secrets["passwords"] and \
            st.session_state["password"] == st.secrets["passwords"][st.session_state["username"]]:
+            
             st.session_state["password_correct"] = True
+            # 🔴 CRITICAL FIX: Username ko permanent variable mein save karna
+            st.session_state["logged_in_user"] = st.session_state["username"]
+            
             del st.session_state["password"]  # Password memory se delete
         else:
             st.session_state["password_correct"] = False
 
     if "password_correct" not in st.session_state:
+        # First run, show inputs
         st.text_input("Username (Email)", key="username")
         st.text_input("Password", type="password", on_change=password_entered, key="password")
         return False
     elif not st.session_state["password_correct"]:
+        # Password incorrect, show inputs again + error
         st.text_input("Username (Email)", key="username")
         st.text_input("Password", type="password", on_change=password_entered, key="password")
         st.error("😕 User not known or password incorrect")
         return False
     else:
+        # Password correct
         return True
 
 # --- 1. CONFIG & AUTH ---
@@ -40,7 +49,8 @@ st.set_page_config(page_title="Life OS Pro", page_icon="⚡", layout="wide", ini
 if not check_password():
     st.stop()
 
-current_user_id = st.session_state["username"]
+# Ab hum "username" ki bajaye "logged_in_user" use karenge jo delete nahi hoga
+current_user_id = st.session_state["logged_in_user"]
 
 # --- 2. FIREBASE CONNECTION ---
 if not firebase_admin._apps:
@@ -180,7 +190,6 @@ with st.sidebar:
         del st.session_state["password_correct"]
         st.rerun()
     st.write("---")
-    # Yahan wo line fix kar di hai jo toot gayi thi
     menu = st.radio("Navigate", ["📊 Dashboard", "🎯 Focus", "💰 Wallet", "💪 Habits", "📝 Journal", "⚙️ Settings"])
 
 # === DASHBOARD ===
@@ -237,7 +246,7 @@ elif menu == "🎯 Focus":
     else: st.info("No goals.")
     st.markdown("</div>", unsafe_allow_html=True)
 
-# === WALLET (UPDATED CATEGORIES) ===
+# === WALLET (UPDATED WITH EMOJIS) ===
 elif menu == "💰 Wallet":
     curr = st.session_state.currency
     val = st.session_state.balance
@@ -248,7 +257,7 @@ elif menu == "💰 Wallet":
     with tab1:
         typ = st.radio("Type", ["Expense 🔴", "Income 🟢"], horizontal=True)
         with st.form("money"):
-            # --- NEW CATEGORIES ADDED HERE ---
+            # --- EMOJI CATEGORIES ADDED ---
             if "Income" in typ:
                 cats = ["Salary 💰", "Freelance 💻", "Business 📈", "Gift 🎁", "Investments 📊", "Allowance 💵", "Other ➕"]
             else:
