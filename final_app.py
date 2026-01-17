@@ -14,7 +14,12 @@ from firebase_admin import credentials, firestore
 # --- 1. FIREBASE CONNECTION (UPDATED) ---
 if not firebase_admin._apps:
     # Ab hum raw JSON text parh rahe hain jo asaan hai
+    # Error pakarnay wala code
+try:
     key_dict = json.loads(st.secrets["firebase"]["my_key"])
+except json.JSONDecodeError:
+    st.error("🚨 Secrets Error: Aap ne JSON paste karte waqt koi bracket miss kar diya hai. Dobara check karein!")
+    st.stop()
     cred = credentials.Certificate(key_dict)
     firebase_admin.initialize_app(cred)
 
@@ -340,3 +345,4 @@ elif menu == "⚙️ Settings":
         st.session_state.clear()
         save_user_data() # Cloud par bhi empty save karein
         st.rerun()
+
