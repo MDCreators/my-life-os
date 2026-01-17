@@ -7,88 +7,100 @@ import streamlit.components.v1 as components
 import time
 import random
 import os
-import json # JSON library add ki hai
+import json
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# --- 1. FIREBASE CONNECTION (UPDATED) ---
+# --- 1. FIREBASE CONNECTION (FIXED) ---
+# Check if Firebase is already initialized
 if not firebase_admin._apps:
-    # Ab hum raw JSON text parh rahe hain jo asaan hai
-    # Error pakarnay wala code
-try:
-    key_dict = json.loads(st.secrets["firebase"]["my_key"])
-except json.JSONDecodeError:
-    st.error("🚨 Secrets Error: Aap ne JSON paste karte waqt koi bracket miss kar diya hai. Dobara check karein!")
-    st.stop()
-    cred = credentials.Certificate(key_dict)
-    firebase_admin.initialize_app(cred)
+    try:
+        # Secrets se key uthana
+        key_content = st.secrets["firebase"]["my_key"]
+        
+        # Agar key string mein hai to JSON banao
+        key_dict = json.loads(key_content)
+        
+        # Connect karo
+        cred = credentials.Certificate(key_dict)
+        firebase_admin.initialize_app(cred)
+        
+    except json.JSONDecodeError:
+        st.error("🚨 SECRET ERROR: Secrets mein JSON sahi paste nahi hua. Brackets {} check karein.")
+        st.stop()
+    except Exception as e:
+        st.error(f"🚨 CONNECTION ERROR: {e}")
+        st.stop()
 
 db = firestore.client()
 
 # --- 2. DATA FUNCTIONS (CLOUD) ---
 def load_user_data(user_id="boss_user"):
-    # Cloud se data mangwana
-    doc_ref = db.collection("users").document(user_id)
-    doc = doc_ref.get()
-    if doc.exists:
-        return doc.to_dict()
-    return None
+    try:
+        doc_ref = db.collection("users").document(user_id)
+        doc = doc_ref.get()
+        if doc.exists:
+            return doc.to_dict()
+        return None
+    except Exception as e:
+        st.warning(f"Offline Mode: {e}")
+        return None
 
 def save_user_data(user_id="boss_user"):
-    # Cloud par data bhejna
-    data = {
-        "goals": st.session_state.goals,
-        "habits": st.session_state.habits,
-        "balance": st.session_state.balance,
-        "transactions": st.session_state.transactions,
-        "water": st.session_state.water,
-        "xp": st.session_state.xp,
-        "level": st.session_state.level,
-        "user_name": st.session_state.user_name,
-        "currency": st.session_state.currency,
-        "timezone": st.session_state.timezone,
-        "journal_logs": st.session_state.journal_logs
-    }
-    db.collection("users").document(user_id).set(data)
+    try:
+        data = {
+            "goals": st.session_state.goals,
+            "habits": st.session_state.habits,
+            "balance": st.session_state.balance,
+            "transactions": st.session_state.transactions,
+            "water": st.session_state.water,
+            "xp": st.session_state.xp,
+            "level": st.session_state.level,
+            "user_name": st.session_state.user_name,
+            "currency": st.session_state.currency,
+            "timezone": st.session_state.timezone,
+            "journal_logs": st.session_state.journal_logs
+        }
+        db.collection("users").document(user_id).set(data)
+    except:
+        pass # Chup chap ignore karo agar net nahi hai
 
 # --- 3. STATE INITIALIZATION ---
-# Pehle Cloud check karein
-saved_data = load_user_data()
-
-if saved_data:
-    st.toast("Data Loaded from Cloud! ☁️")
-    # Agar cloud par data hai to use load karo
-    if 'user_name' not in st.session_state: st.session_state.user_name = saved_data.get("user_name", "Boss")
-    if 'xp' not in st.session_state: st.session_state.xp = saved_data.get("xp", 0)
-    if 'level' not in st.session_state: st.session_state.level = saved_data.get("level", 1)
-    if 'balance' not in st.session_state: st.session_state.balance = saved_data.get("balance", 0)
-    if 'water' not in st.session_state: st.session_state.water = saved_data.get("water", 0)
-    if 'transactions' not in st.session_state: st.session_state.transactions = saved_data.get("transactions", [])
-    if 'goals' not in st.session_state: st.session_state.goals = saved_data.get("goals", [])
-    if 'habits' not in st.session_state: st.session_state.habits = saved_data.get("habits", [])
-    if 'currency' not in st.session_state: st.session_state.currency = saved_data.get("currency", "PKR")
-    if 'journal_logs' not in st.session_state: st.session_state.journal_logs = saved_data.get("journal_logs", [])
-    if 'timezone' not in st.session_state: st.session_state.timezone = saved_data.get("timezone", "Asia/Karachi")
-else:
-    # First time user defaults
-    if 'user_name' not in st.session_state: st.session_state.user_name = "Boss"
-    if 'xp' not in st.session_state: st.session_state.xp = 0
-    if 'level' not in st.session_state: st.session_state.level = 1
-    if 'balance' not in st.session_state: st.session_state.balance = 0
-    if 'water' not in st.session_state: st.session_state.water = 0
-    if 'transactions' not in st.session_state: st.session_state.transactions = []
-    if 'goals' not in st.session_state: st.session_state.goals = [{"text": "First Mission", "done": False}]
-    if 'habits' not in st.session_state: st.session_state.habits = [{"name": "Exercise", "streak": 0}]
-    if 'currency' not in st.session_state: st.session_state.currency = "PKR"
-    if 'journal_logs' not in st.session_state: st.session_state.journal_logs = []
-    if 'timezone' not in st.session_state: st.session_state.timezone = "Asia/Karachi"
+if 'data_loaded' not in st.session_state:
+    saved_data = load_user_data()
+    if saved_data:
+        st.toast("Data Loaded from Cloud! ☁️")
+        if 'user_name' not in st.session_state: st.session_state.user_name = saved_data.get("user_name", "Boss")
+        if 'xp' not in st.session_state: st.session_state.xp = saved_data.get("xp", 0)
+        if 'level' not in st.session_state: st.session_state.level = saved_data.get("level", 1)
+        if 'balance' not in st.session_state: st.session_state.balance = saved_data.get("balance", 0)
+        if 'water' not in st.session_state: st.session_state.water = saved_data.get("water", 0)
+        if 'transactions' not in st.session_state: st.session_state.transactions = saved_data.get("transactions", [])
+        if 'goals' not in st.session_state: st.session_state.goals = saved_data.get("goals", [])
+        if 'habits' not in st.session_state: st.session_state.habits = saved_data.get("habits", [])
+        if 'currency' not in st.session_state: st.session_state.currency = saved_data.get("currency", "PKR")
+        if 'journal_logs' not in st.session_state: st.session_state.journal_logs = saved_data.get("journal_logs", [])
+        if 'timezone' not in st.session_state: st.session_state.timezone = saved_data.get("timezone", "Asia/Karachi")
+    else:
+        # Defaults
+        if 'user_name' not in st.session_state: st.session_state.user_name = "Boss"
+        if 'xp' not in st.session_state: st.session_state.xp = 0
+        if 'level' not in st.session_state: st.session_state.level = 1
+        if 'balance' not in st.session_state: st.session_state.balance = 0
+        if 'water' not in st.session_state: st.session_state.water = 0
+        if 'transactions' not in st.session_state: st.session_state.transactions = []
+        if 'goals' not in st.session_state: st.session_state.goals = [{"text": "Mission 1", "done": False}]
+        if 'habits' not in st.session_state: st.session_state.habits = [{"name": "Exercise", "streak": 0}]
+        if 'currency' not in st.session_state: st.session_state.currency = "PKR"
+        if 'journal_logs' not in st.session_state: st.session_state.journal_logs = []
+        if 'timezone' not in st.session_state: st.session_state.timezone = "Asia/Karachi"
+    st.session_state.data_loaded = True
 
 if 'run_effect' not in st.session_state: st.session_state.run_effect = None
 
-# --- 4. UI SETUP ---
+# --- 4. UI CONFIG ---
 st.set_page_config(page_title="Life OS Pro", page_icon="⚡", layout="wide", initial_sidebar_state="collapsed")
 
-# CSS Styling
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;800&display=swap');
@@ -129,7 +141,7 @@ def check_level_up():
         play_sound_and_wait("levelup")
         st.session_state.run_effect = "balloons"
         st.toast(f"🎉 LEVEL UP! You are now Level {st.session_state.level}!", icon="🆙")
-    save_user_data() # Save on level up
+    save_user_data()
 
 # Effect Runner
 if st.session_state.run_effect == "balloons":
@@ -345,4 +357,3 @@ elif menu == "⚙️ Settings":
         st.session_state.clear()
         save_user_data() # Cloud par bhi empty save karein
         st.rerun()
-
