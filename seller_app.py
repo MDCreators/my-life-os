@@ -2,321 +2,352 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime
+from datetime import datetime, timedelta
+import random
 
-# --- 1. PAGE CONFIG (Wide & Dark) ---
-st.set_page_config(page_title="Seller HQ Pro", page_icon="⚡", layout="wide")
+# ==========================================
+# 1. APP CONFIGURATION (Must be first)
+# ==========================================
+st.set_page_config(
+    page_title="Seller OS: Enterprise",
+    page_icon="💎",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# --- 2. CUSTOM CSS (THE MAGIC) ---
-# Ye wo code hay jo App ko khoobsurat banaye ga
+# ==========================================
+# 2. ADVANCED STYLING (CSS)
+# ==========================================
 st.markdown("""
 <style>
-    /* Main Background Setup */
+    /* Main Theme */
     .stApp {
-        background-color: #0E1117;
+        background-color: #000000;
+        color: #ffffff;
     }
     
-    /* Metrics Cards (Glassmorphism) */
-    div.css-1r6slb0, div.stMetric {
-        background: linear-gradient(135deg, #1E1E1E 0%, #2D2D2D 100%);
-        border: 1px solid #444;
-        padding: 15px;
-        border-radius: 12px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        transition: transform 0.2s;
+    /* Neon Cards */
+    div[data-testid="metric-container"] {
+        background-color: #111111;
+        border: 1px solid #333;
+        padding: 20px;
+        border-radius: 15px;
+        box-shadow: 0 0 10px rgba(0, 255, 127, 0.1);
+        transition: all 0.3s ease;
     }
-    div.stMetric:hover {
-        transform: scale(1.02);
+    div[data-testid="metric-container"]:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0 20px rgba(0, 255, 127, 0.4);
         border-color: #00FF7F;
     }
     
-    /* Custom Buttons */
+    /* Custom Sidebar */
+    section[data-testid="stSidebar"] {
+        background-color: #050505;
+        border-right: 1px solid #222;
+    }
+    
+    /* Gradient Buttons */
     .stButton>button {
-        background: linear-gradient(90deg, #00C853 0%, #B2FF59 100%);
-        color: black;
-        font-weight: bold;
+        background: linear-gradient(45deg, #FF0080, #7928CA);
+        color: white;
         border: none;
+        padding: 12px 24px;
         border-radius: 8px;
-        padding: 10px 20px;
-        transition: all 0.3s ease;
+        font-weight: bold;
+        letter-spacing: 1px;
     }
     .stButton>button:hover {
-        box-shadow: 0 0 15px #00C853;
-        color: white;
+        opacity: 0.9;
+        box-shadow: 0 0 15px rgba(255, 0, 128, 0.5);
     }
     
-    /* Input Fields */
-    .stTextInput>div>div>input {
-        background-color: #262730;
-        color: white;
-        border-radius: 8px;
-        border: 1px solid #444;
+    /* Success Messages */
+    .stSuccess {
+        background-color: rgba(0, 255, 127, 0.1);
+        border-left: 5px solid #00FF7F;
     }
     
-    /* Sidebar Styling */
-    section[data-testid="stSidebar"] {
-        background-color: #161B22;
-        border-right: 1px solid #333;
-    }
-    
-    /* Titles with Gradient */
-    h1, h2, h3 {
-        background: -webkit-linear-gradient(45deg, #00FF7F, #00E5FF);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-weight: 800;
+    /* Tables */
+    div[data-testid="stDataFrame"] {
+        border: 1px solid #333;
+        border-radius: 10px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATA SETUP ---
+# ==========================================
+# 3. SESSION STATE (Database)
+# ==========================================
 if 'db_orders' not in st.session_state:
-    st.session_state.db_orders = pd.DataFrame(columns=[
-        "Order ID", "Date", "Customer Name", "Phone", "City", 
-        "Address", "Item", "Qty", "Price", "DC", "Total", 
-        "Cost Price", "Status", "Courier", "Tracking ID"
-    ])
+    # Sample Data for Demo
+    sample_data = [
+        {"Order ID": "ORD-1001", "Date": "2024-01-20", "Customer": "Ali Khan", "City": "Lahore", "Item": "Gaming Mouse", "Qty": 1, "Total": 2500, "Status": "Delivered", "Source": "Facebook"},
+        {"Order ID": "ORD-1002", "Date": "2024-01-21", "Customer": "Sara Ahmed", "City": "Karachi", "Item": "Headphones", "Qty": 2, "Total": 6000, "Status": "Pending", "Source": "Instagram"},
+    ]
+    st.session_state.db_orders = pd.DataFrame(sample_data)
 
 if 'db_products' not in st.session_state:
-    st.session_state.db_products = pd.DataFrame(columns=[
-        "SKU", "Product Name", "Cost Price", "Sale Price", "Stock", "Category"
+    st.session_state.db_products = pd.DataFrame([
+        {"SKU": "GM-01", "Name": "Gaming Mouse", "Cost": 1500, "Price": 2500, "Stock": 15},
+        {"SKU": "HP-02", "Name": "Headphones", "Cost": 2000, "Price": 3000, "Stock": 8},
+        {"SKU": "KB-03", "Name": "RGB Keyboard", "Cost": 3500, "Price": 5500, "Stock": 3}, # Low Stock
     ])
 
-if 'db_expenses' not in st.session_state:
-    st.session_state.db_expenses = pd.DataFrame(columns=[
-        "Date", "Type", "Description", "Amount"
-    ])
+if 'daily_target' not in st.session_state:
+    st.session_state.daily_target = 50000
 
-# --- HELPER FUNCTIONS ---
-def get_kpis():
-    if st.session_state.db_orders.empty:
-        return 0, 0, 0, 0
-    
-    valid_orders = st.session_state.db_orders[st.session_state.db_orders['Status'].isin(['Delivered', 'Dispatched', 'Payment Received'])]
-    revenue = valid_orders['Total'].sum()
-    cogs = (valid_orders['Cost Price'] * valid_orders['Qty']).sum()
-    
-    rto_orders = st.session_state.db_orders[st.session_state.db_orders['Status'] == 'Returned (RTO)']
-    rto_loss = rto_orders['DC'].sum() * 2
-    
-    expenses = st.session_state.db_expenses['Amount'].sum()
-    net_profit = revenue - cogs - expenses - rto_loss
-    
-    return revenue, cogs, expenses + rto_loss, net_profit
-
-# --- SIDEBAR ---
+# ==========================================
+# 4. SIDEBAR NAVIGATION
+# ==========================================
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/3081/3081559.png", width=60)
-    st.title("SELLER OS")
-    st.markdown("---")
+    st.title("💎 Seller OS")
+    st.caption("Enterprise Edition v2.0")
     
-    menu = st.radio("NAVIGATION", [
-        "📊 Dashboard", 
+    # User Profile (Fake)
+    st.markdown("""
+    <div style="display: flex; align-items: center; margin-bottom: 20px;">
+        <img src="https://ui-avatars.com/api/?name=Dawood+Boss&background=random" style="border-radius: 50%; width: 40px; margin-right: 10px;">
+        <div>
+            <h4 style="margin:0;">Dawood</h4>
+            <small style="color: #00FF7F;">● Online</small>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    menu = st.radio("MAIN MENU", [
+        "🚀 Command Center", 
         "🛒 New Order (POS)", 
-        "📦 Stockroom", 
-        "🚚 Dispatch Center", 
-        "💸 Finance & Ads"
+        "📦 Inventory Hub", 
+        "🚚 Order Operations", 
+        "💰 Financials"
     ])
     
-    st.markdown("---")
-    pending_count = len(st.session_state.db_orders[st.session_state.db_orders['Status'] == 'Pending'])
-    if pending_count > 0:
-        st.error(f"🚨 {pending_count} Pending Orders!")
-    else:
-        st.success("✅ All Caught Up")
+    st.divider()
+    
+    # 🎯 Daily Target Widget
+    st.markdown("### 🎯 Today's Goal")
+    today_sales = st.session_state.db_orders[st.session_state.db_orders['Date'] == datetime.now().strftime("%Y-%m-%d")]['Total'].sum()
+    progress = min(today_sales / st.session_state.daily_target, 1.0)
+    st.progress(progress)
+    st.caption(f"PKR {today_sales:,} / {st.session_state.daily_target:,}")
+    
+    if progress >= 1.0:
+        st.balloons()
 
-# ==========================
-# 📊 DASHBOARD (THE PRO LOOK)
-# ==========================
-if menu == "📊 Dashboard":
-    st.markdown("## 📈 Business Overview")
+# ==========================================
+# 5. MAIN PAGES
+# ==========================================
+
+# --- 🚀 COMMAND CENTER (Dashboard) ---
+if menu == "🚀 Command Center":
+    st.markdown("# 🚀 Business Overview")
+    st.markdown(f"**{datetime.now().strftime('%A, %d %B %Y')}**")
     
-    rev, cost, exp, profit = get_kpis()
+    # Top Stats Cards
+    total_rev = st.session_state.db_orders['Total'].sum()
+    total_orders = len(st.session_state.db_orders)
+    pending_orders = len(st.session_state.db_orders[st.session_state.db_orders['Status'] == 'Pending'])
     
-    # Custom HTML Cards (Is se look change hogi)
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("💰 Revenue", f"Rs {rev:,.0f}", "+12%")
-    col2.metric("📦 Product Cost", f"Rs {cost:,.0f}", "COGS")
-    col3.metric("🔥 Burn (Ads/Ops)", f"Rs {exp:,.0f}", "Expense")
-    col4.metric("💎 NET PROFIT", f"Rs {profit:,.0f}", "Real Cash")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("💰 Total Revenue", f"PKR {total_rev:,}", "+15%")
+    c2.metric("📦 Total Orders", total_orders, "+4")
+    c3.metric("⏳ Pending Dispatch", pending_orders, delta_color="inverse")
+    c4.metric("🔥 Conversion Rate", "3.2%", "+0.5%")
     
-    st.markdown("---")
+    st.divider()
     
-    # Modern Charts
-    c1, c2 = st.columns([2, 1])
+    # Charts Section
+    col_chart1, col_chart2 = st.columns([2, 1])
     
-    with c1:
-        st.subheader("Sales Trend & Performance")
+    with col_chart1:
+        st.subheader("📈 Sales Performance")
+        # Fake hourly data generation for graph feel
+        chart_data = pd.DataFrame({
+            "Time": ["9 AM", "12 PM", "3 PM", "6 PM", "9 PM"],
+            "Sales": [5000, 12000, 8000, 25000, 15000]
+        })
+        fig = px.area(chart_data, x="Time", y="Sales", template="plotly_dark", color_discrete_sequence=["#00FF7F"])
+        fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig, use_container_width=True)
+        
+    with col_chart2:
+        st.subheader("🏙️ Top Cities")
         if not st.session_state.db_orders.empty:
-            df_chart = st.session_state.db_orders.groupby("Date")["Total"].sum().reset_index()
-            fig = px.area(df_chart, x="Date", y="Total", template="plotly_dark", color_discrete_sequence=['#00FF7F'])
-            fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Waiting for sales data...")
-            
-    with c2:
-        st.subheader("Expense Breakdown")
-        if not st.session_state.db_expenses.empty:
-            fig2 = px.pie(st.session_state.db_expenses, values='Amount', names='Type', hole=0.6, template="plotly_dark", color_discrete_sequence=px.colors.sequential.Teal)
+            city_counts = st.session_state.db_orders['City'].value_counts()
+            fig2 = px.pie(values=city_counts.values, names=city_counts.index, hole=0.6, template="plotly_dark")
             fig2.update_layout(paper_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig2, use_container_width=True)
-        else:
-            st.caption("No expenses recorded yet.")
 
-# ==========================
-# 🛒 NEW ORDER (Clean Form)
-# ==========================
+# --- 🛒 NEW ORDER (POS Style) ---
 elif menu == "🛒 New Order (POS)":
-    st.markdown("## 📝 Create New Order")
+    st.markdown("# 🛒 Create Order")
     
-    col_main, col_side = st.columns([2, 1])
+    col_left, col_right = st.columns([2, 1])
     
-    with col_side:
-        st.info("💡 **Pro Tip:** Number pehlay daalain to Fraud Check khud ho jaye ga.")
-        phone_val = st.text_input("Customer Phone", placeholder="0300xxxxxxx")
-        
-        # Live Fraud Check
-        if phone_val:
-            hist = st.session_state.db_orders[st.session_state.db_orders['Phone'] == phone_val]
-            if not hist.empty:
-                rto = len(hist[hist['Status'] == 'Returned (RTO)'])
-                if rto > 0:
-                    st.error(f"⚠️ HIGH RISK! {rto} Returns.")
-                else:
-                    st.success("✅ Safe Customer.")
-
-    with col_main:
-        with st.form("clean_order_form"):
+    with col_right:
+        st.info("💡 **Customer Insights**")
+        phone = st.text_input("📞 Phone Number", placeholder="0300-1234567")
+        if phone:
+            st.success("✅ New Customer (No Fraud History)")
+            # Agar purana customer hota to yahan history aati
+            
+    with col_left:
+        with st.form("pos_form"):
             c1, c2 = st.columns(2)
-            name = c1.text_input("Customer Name")
-            city = c2.selectbox("City", ["Lahore", "Karachi", "Islamabad", "Faisalabad", "Multan", "Other"])
-            addr = st.text_area("Delivery Address", height=80)
+            name = c1.text_input("👤 Customer Name")
+            city = c2.selectbox("🏙️ City", ["Karachi", "Lahore", "Islamabad", "Rawalpindi", "Faisalabad", "Multan", "Peshawar", "Other"])
+            address = st.text_area("🏠 Complete Address")
             
-            st.markdown("### Cart Details")
-            if st.session_state.db_products.empty:
-                st.warning("Inventory is empty! Go to Stockroom.")
-                st.stop()
-                
-            p_list = st.session_state.db_products['Product Name'].unique()
-            item_sel = st.selectbox("Select Item", p_list)
+            st.markdown("---")
+            st.subheader("🛍️ Cart")
             
-            # Auto Data
-            p_data = st.session_state.db_products[st.session_state.db_products['Product Name'] == item_sel].iloc[0]
+            # Product Selector
+            prod_names = st.session_state.db_products['Name'].tolist()
+            selected_prod = st.selectbox("Select Product", prod_names)
             
-            sc1, sc2, sc3 = st.columns(3)
-            qty = sc1.number_input("Qty", 1, 100, 1)
-            price = sc2.number_input("Sale Price", value=int(p_data['Sale Price']))
-            dc = sc3.number_input("Delivery", value=200)
+            # Auto-Fetch Details
+            p_details = st.session_state.db_products[st.session_state.db_products['Name'] == selected_prod].iloc[0]
             
-            total_bill = (price * qty) + dc
+            qc1, qc2, qc3 = st.columns(3)
+            qty = qc1.number_input("Quantity", 1, 10, 1)
+            price = qc2.number_input("Unit Price", value=int(p_details['Price']))
+            dc = qc3.number_input("Delivery Charges", value=200)
             
+            total = (price * qty) + dc
+            
+            # Big Total Display
             st.markdown(f"""
-            <div style="background-color: #004D40; padding: 10px; border-radius: 5px; text-align: center; margin-top: 10px;">
-                <h3 style="color: white; margin:0;">Total: Rs {total_bill}</h3>
+            <div style="background:#222; padding:15px; border-radius:10px; text-align:center; border: 1px solid #444;">
+                <h2 style="color:#00FF7F; margin:0;">TOTAL: PKR {total:,}</h2>
             </div>
             """, unsafe_allow_html=True)
+            st.write("")
             
-            submitted = st.form_submit_button("🚀 PLACE ORDER")
-            
-            if submitted:
-                new_entry = {
-                    "Order ID": f"ORD-{len(st.session_state.db_orders)+1001}",
+            if st.form_submit_button("✅ CONFIRM ORDER"):
+                new_order = {
+                    "Order ID": f"ORD-{random.randint(2000, 9999)}",
                     "Date": datetime.now().strftime("%Y-%m-%d"),
-                    "Customer Name": name, "Phone": phone_val, "City": city,
-                    "Address": addr, "Item": item_sel, "Qty": qty,
-                    "Price": price, "DC": dc, "Total": total_bill,
-                    "Cost Price": p_data['Cost Price'], "Status": "Pending"
+                    "Customer": name, "City": city, "Item": selected_prod,
+                    "Qty": qty, "Total": total, "Status": "Pending", "Source": "Manual"
                 }
-                st.session_state.db_orders = pd.concat([st.session_state.db_orders, pd.DataFrame([new_entry])], ignore_index=True)
-                st.success("Order Confirmed!")
+                st.session_state.db_orders = pd.concat([st.session_state.db_orders, pd.DataFrame([new_order])], ignore_index=True)
+                st.balloons()
+                st.success("Order Placed Successfully!")
 
-# ==========================
-# 📦 STOCKROOM (Inventory)
-# ==========================
-elif menu == "📦 Stockroom":
-    st.markdown("## 🏭 Inventory Management")
+# --- 📦 INVENTORY HUB ---
+elif menu == "📦 Inventory Hub":
+    st.markdown("# 📦 Inventory Management")
     
-    tab1, tab2 = st.tabs(["📋 Current Stock", "➕ Add New Item"])
+    # Low Stock Alert
+    low_stock = st.session_state.db_products[st.session_state.db_products['Stock'] < 5]
+    if not low_stock.empty:
+        st.error(f"⚠️ Warning: {len(low_stock)} Items are Low on Stock!")
+        st.dataframe(low_stock)
+    
+    tab1, tab2 = st.tabs(["📋 View Stock", "➕ Add Product"])
     
     with tab1:
-        # Fancy DataFrame
         st.dataframe(
             st.session_state.db_products,
             use_container_width=True,
             column_config={
-                "Stock": st.column_config.ProgressColumn("Stock Level", format="%f", min_value=0, max_value=100),
-                "Sale Price": st.column_config.NumberColumn("Price (Rs)", format="Rs %d")
+                "Stock": st.column_config.ProgressColumn("Stock Level", min_value=0, max_value=20, format="%d"),
+                "Price": st.column_config.NumberColumn("Sale Price", format="PKR %d")
             }
         )
         
     with tab2:
-        with st.form("add_stock"):
+        with st.form("add_prod"):
             c1, c2 = st.columns(2)
-            name = c1.text_input("Product Name")
-            sku = c2.text_input("SKU")
+            n_sku = c1.text_input("SKU Code")
+            n_name = c2.text_input("Product Name")
             c3, c4, c5 = st.columns(3)
-            cost = c3.number_input("Cost", 0)
-            sale = c4.number_input("Sale Price", 0)
-            stock = c5.number_input("Stock Qty", 0)
+            n_cost = c3.number_input("Cost", 0)
+            n_price = c4.number_input("Sale Price", 0)
+            n_stock = c5.number_input("Opening Stock", 0)
             
-            if st.form_submit_button("Save Item"):
-                new_prod = {"SKU": sku, "Product Name": name, "Cost Price": cost, "Sale Price": sale, "Stock": stock, "Category": "General"}
+            if st.form_submit_button("Add to Inventory"):
+                new_prod = {"SKU": n_sku, "Name": n_name, "Cost": n_cost, "Price": n_price, "Stock": n_stock}
                 st.session_state.db_products = pd.concat([st.session_state.db_products, pd.DataFrame([new_prod])], ignore_index=True)
-                st.success(f"{name} added to stock!")
+                st.success("Product Added!")
 
-# ==========================
-# 🚚 DISPATCH CENTER
-# ==========================
-elif menu == "🚚 Dispatch Center":
-    st.markdown("## 🚛 Order Operations")
+# --- 🚚 ORDER OPERATIONS (The Cool Part) ---
+elif menu == "🚚 Order Operations":
+    st.markdown("# 🚚 Dispatch Center")
     
-    st.markdown("#### Pending Orders")
-    pending = st.session_state.db_orders[st.session_state.db_orders['Status'] == 'Pending']
+    filter_status = st.radio("Filter Orders:", ["Pending", "Dispatched", "All"], horizontal=True)
     
-    if not pending.empty:
-        for idx, row in pending.iterrows():
-            with st.expander(f"{row['Order ID']} | {row['Customer Name']} | Rs {row['Total']}"):
-                c1, c2 = st.columns([3, 1])
-                c1.write(f"**Item:** {row['Item']} (x{row['Qty']})")
-                c1.write(f"**Address:** {row['Address']}, {row['City']}")
-                
-                # Action Buttons
-                col_btn1, col_btn2, col_btn3 = c2.columns(3)
-                
-                # WhatsApp
-                wa_link = f"https://wa.me/92{str(row['Phone'])[1:]}?text=Salam {row['Customer Name']}, order confirm karein?"
-                col_btn1.link_button("💬", wa_link)
-                
-                if col_btn2.button("✅", key=f"ok_{idx}"):
-                    real_idx = st.session_state.db_orders[st.session_state.db_orders['Order ID'] == row['Order ID']].index[0]
-                    st.session_state.db_orders.at[real_idx, 'Status'] = 'Dispatched'
-                    st.rerun()
-                    
-                if col_btn3.button("❌", key=f"no_{idx}"):
-                    real_idx = st.session_state.db_orders[st.session_state.db_orders['Order ID'] == row['Order ID']].index[0]
-                    st.session_state.db_orders.at[real_idx, 'Status'] = 'Cancelled'
-                    st.rerun()
+    if filter_status == "All":
+        filtered_df = st.session_state.db_orders
     else:
-        st.info("No pending orders. Chill karein! ☕")
+        filtered_df = st.session_state.db_orders[st.session_state.db_orders['Status'] == filter_status]
+    
+    if filtered_df.empty:
+        st.info("No orders found in this category.")
+    else:
+        for index, row in filtered_df.iterrows():
+            with st.expander(f"{row['Order ID']} | {row['Customer']} | PKR {row['Total']}"):
+                col1, col2, col3 = st.columns([2, 1, 1])
+                
+                with col1:
+                    st.write(f"**Item:** {row['Item']} (x{row['Qty']})")
+                    st.write(f"**City:** {row['City']}")
+                    st.caption(f"Date: {row['Date']}")
+                
+                with col2:
+                    st.markdown("##### Actions")
+                    if row['Status'] == 'Pending':
+                        if st.button("📦 Mark Dispatched", key=f"disp_{index}"):
+                            st.session_state.db_orders.at[index, 'Status'] = 'Dispatched'
+                            st.rerun()
+                    
+                    if st.button("🖨️ Print Invoice", key=f"prt_{index}"):
+                        # Simulated Invoice
+                        st.markdown(f"""
+                        <div style="background:white; color:black; padding:20px; border-radius:10px;">
+                            <h3 style="text-align:center;">INVOICE</h3>
+                            <p><b>Order:</b> {row['Order ID']}</p>
+                            <p><b>Customer:</b> {row['Customer']}</p>
+                            <hr>
+                            <p>{row['Item']} x {row['Qty']} = {row['Total']}</p>
+                            <h4 style="text-align:right;">Total: {row['Total']}</h4>
+                        </div>
+                        """, unsafe_allow_html=True)
 
-# ==========================
-# 💸 FINANCE (Ads Tracker)
-# ==========================
-elif menu == "💸 Finance & Ads":
-    st.markdown("## 📉 Expense & Ads Tracker")
+# --- 💰 FINANCIALS ---
+elif menu == "💰 Financials":
+    st.markdown("# 💰 Financial Health")
     
-    with st.expander("➕ Add New Expense", expanded=True):
-        with st.form("exp_input"):
-            c1, c2, c3 = st.columns(3)
-            date = c1.date_input("Date")
-            cat = c2.selectbox("Category", ["Meta Ads", "Packaging", "Salary", "Food", "RTO Charges"])
-            amt = c3.number_input("Amount", 100)
-            
-            if st.form_submit_button("Add Expense"):
-                new_exp = {"Date": date, "Type": cat, "Description": "-", "Amount": amt}
-                st.session_state.db_expenses = pd.concat([st.session_state.db_expenses, pd.DataFrame([new_exp])], ignore_index=True)
-                st.success("Added!")
+    # Cash Flow Logic
+    delivered_sales = st.session_state.db_orders[st.session_state.db_orders['Status'] == 'Delivered']['Total'].sum()
+    pending_cod = st.session_state.db_orders[st.session_state.db_orders['Status'] != 'Delivered']['Total'].sum()
     
-    if not st.session_state.db_expenses.empty:
-        st.dataframe(st.session_state.db_expenses, use_container_width=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("""
+        <div style="padding:20px; background:#1E1E1E; border-radius:10px; border-left: 5px solid #00FF7F;">
+            <h3 style="margin:0; color:#888;">Cash In Hand (Bank)</h3>
+            <h1 style="margin:0; color:white;">PKR {:,}</h1>
+        </div>
+        """.format(delivered_sales), unsafe_allow_html=True)
+        
+    with col2:
+        st.markdown("""
+        <div style="padding:20px; background:#1E1E1E; border-radius:10px; border-left: 5px solid #FFA500;">
+            <h3 style="margin:0; color:#888;">Pending at Courier</h3>
+            <h1 style="margin:0; color:white;">PKR {:,}</h1>
+        </div>
+        """.format(pending_cod), unsafe_allow_html=True)
+        
+    st.divider()
+    st.subheader("Expense Tracker")
+    
+    with st.expander("➕ Add Expense"):
+        ce1, ce2, ce3 = st.columns(3)
+        ce1.date_input("Date")
+        ce2.text_input("Description (Ads, Packaging, etc)")
+        ce3.number_input("Amount", 0)
+        st.button("Save Expense")
+        
+    st.info("Feature coming soon: Auto-Calculate Net Profit based on COGS + Expenses.")
