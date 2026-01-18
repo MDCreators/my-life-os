@@ -1,29 +1,75 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from datetime import datetime
 
-# --- CONFIGURATION ---
-st.set_page_config(page_title="Seller HQ 🇵🇰", page_icon="🚀", layout="wide")
+# --- 1. PAGE CONFIG (Wide & Dark) ---
+st.set_page_config(page_title="Seller HQ Pro", page_icon="⚡", layout="wide")
 
-# --- CUSTOM CSS (Thora style) ---
+# --- 2. CUSTOM CSS (THE MAGIC) ---
+# Ye wo code hay jo App ko khoobsurat banaye ga
 st.markdown("""
 <style>
-    div.stMetric {
-        background-color: #1E1E1E;
-        border: 1px solid #333;
-        padding: 10px;
-        border-radius: 5px;
+    /* Main Background Setup */
+    .stApp {
+        background-color: #0E1117;
     }
-    [data-testid="stMetricValue"] {
-        font-size: 24px;
-        color: #00FF7F;
+    
+    /* Metrics Cards (Glassmorphism) */
+    div.css-1r6slb0, div.stMetric {
+        background: linear-gradient(135deg, #1E1E1E 0%, #2D2D2D 100%);
+        border: 1px solid #444;
+        padding: 15px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        transition: transform 0.2s;
+    }
+    div.stMetric:hover {
+        transform: scale(1.02);
+        border-color: #00FF7F;
+    }
+    
+    /* Custom Buttons */
+    .stButton>button {
+        background: linear-gradient(90deg, #00C853 0%, #B2FF59 100%);
+        color: black;
+        font-weight: bold;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 20px;
+        transition: all 0.3s ease;
+    }
+    .stButton>button:hover {
+        box-shadow: 0 0 15px #00C853;
+        color: white;
+    }
+    
+    /* Input Fields */
+    .stTextInput>div>div>input {
+        background-color: #262730;
+        color: white;
+        border-radius: 8px;
+        border: 1px solid #444;
+    }
+    
+    /* Sidebar Styling */
+    section[data-testid="stSidebar"] {
+        background-color: #161B22;
+        border-right: 1px solid #333;
+    }
+    
+    /* Titles with Gradient */
+    h1, h2, h3 {
+        background: -webkit-linear-gradient(45deg, #00FF7F, #00E5FF);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 800;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- DATABASE SETUP (Auto-Structure) ---
-# Hum columns ko Excel ki bajaye Best Practices par rakhain ge
+# --- 3. DATA SETUP ---
 if 'db_orders' not in st.session_state:
     st.session_state.db_orders = pd.DataFrame(columns=[
         "Order ID", "Date", "Customer Name", "Phone", "City", 
@@ -42,293 +88,235 @@ if 'db_expenses' not in st.session_state:
     ])
 
 # --- HELPER FUNCTIONS ---
-def get_profit_data():
+def get_kpis():
     if st.session_state.db_orders.empty:
         return 0, 0, 0, 0
     
-    # Revenue (Sirf Delivered ya Dispatched orders ka)
     valid_orders = st.session_state.db_orders[st.session_state.db_orders['Status'].isin(['Delivered', 'Dispatched', 'Payment Received'])]
     revenue = valid_orders['Total'].sum()
+    cogs = (valid_orders['Cost Price'] * valid_orders['Qty']).sum()
     
-    # COGS (Product Cost)
-    product_cost = (valid_orders['Cost Price'] * valid_orders['Qty']).sum()
-    
-    # RTO Loss (Return orders ke delivery charges zaya huye)
     rto_orders = st.session_state.db_orders[st.session_state.db_orders['Status'] == 'Returned (RTO)']
-    rto_loss = rto_orders['DC'].sum() * 2  # Aana aur Jana dono ke charges (Roughly)
+    rto_loss = rto_orders['DC'].sum() * 2
     
-    # Marketing & Ops
     expenses = st.session_state.db_expenses['Amount'].sum()
+    net_profit = revenue - cogs - expenses - rto_loss
     
-    net_profit = revenue - product_cost - expenses - rto_loss
-    return revenue, product_cost, expenses + rto_loss, net_profit
+    return revenue, cogs, expenses + rto_loss, net_profit
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.title("🚀 Seller HQ")
-    st.caption("Powering Pakistani Brands")
-    menu = st.radio("Menu", [
-        "📊 Profit Dashboard", 
+    st.image("https://cdn-icons-png.flaticon.com/512/3081/3081559.png", width=60)
+    st.title("SELLER OS")
+    st.markdown("---")
+    
+    menu = st.radio("NAVIGATION", [
+        "📊 Dashboard", 
         "🛒 New Order (POS)", 
-        "📦 Inventory Manager", 
-        "🚚 Order Operations", 
-        "💸 Marketing & Expenses"
+        "📦 Stockroom", 
+        "🚚 Dispatch Center", 
+        "💸 Finance & Ads"
     ])
-    st.divider()
     
-    # Quick Status
-    pending = len(st.session_state.db_orders[st.session_state.db_orders['Status'] == 'Pending'])
-    st.metric("Orders to Pack", pending, delta_color="inverse")
+    st.markdown("---")
+    pending_count = len(st.session_state.db_orders[st.session_state.db_orders['Status'] == 'Pending'])
+    if pending_count > 0:
+        st.error(f"🚨 {pending_count} Pending Orders!")
+    else:
+        st.success("✅ All Caught Up")
 
 # ==========================
-# 📊 PROFIT DASHBOARD
+# 📊 DASHBOARD (THE PRO LOOK)
 # ==========================
-if menu == "📊 Profit Dashboard":
-    st.title("Business Health 🏥")
-    st.markdown("Yahan asli doodh ka doodh aur pani ka pani hoga.")
+if menu == "📊 Dashboard":
+    st.markdown("## 📈 Business Overview")
     
-    rev, cogs, exp, profit = get_profit_data()
+    rev, cost, exp, profit = get_kpis()
     
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total Sales (Revenue)", f"Rs {rev:,.0f}")
-    c2.metric("Product Cost", f"Rs {cogs:,.0f}", delta="-Cost")
-    c3.metric("Ads + RTO Loss", f"Rs {exp:,.0f}", delta="-Expense")
-    c4.metric("💰 NET PROFIT", f"Rs {profit:,.0f}", delta="Jaib Mein Aye")
+    # Custom HTML Cards (Is se look change hogi)
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("💰 Revenue", f"Rs {rev:,.0f}", "+12%")
+    col2.metric("📦 Product Cost", f"Rs {cost:,.0f}", "COGS")
+    col3.metric("🔥 Burn (Ads/Ops)", f"Rs {exp:,.0f}", "Expense")
+    col4.metric("💎 NET PROFIT", f"Rs {profit:,.0f}", "Real Cash")
     
-    st.divider()
+    st.markdown("---")
     
-    # Analytics
-    col_chart1, col_chart2 = st.columns(2)
+    # Modern Charts
+    c1, c2 = st.columns([2, 1])
     
-    with col_chart1:
-        st.subheader("City-wise Sales 🏙️")
+    with c1:
+        st.subheader("Sales Trend & Performance")
         if not st.session_state.db_orders.empty:
-            city_data = st.session_state.db_orders['City'].value_counts()
-            st.bar_chart(city_data)
-        else:
-            st.info("No data yet.")
-
-    with col_chart2:
-        st.subheader("Order Status Ratio 📦")
-        if not st.session_state.db_orders.empty:
-            fig = px.pie(st.session_state.db_orders, names='Status', hole=0.4, template="plotly_dark")
+            df_chart = st.session_state.db_orders.groupby("Date")["Total"].sum().reset_index()
+            fig = px.area(df_chart, x="Date", y="Total", template="plotly_dark", color_discrete_sequence=['#00FF7F'])
+            fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Waiting for sales data...")
             
-            # RTO Warning
-            total_orders = len(st.session_state.db_orders)
-            returns = len(st.session_state.db_orders[st.session_state.db_orders['Status'] == 'Returned (RTO)'])
-            if total_orders > 0:
-                rto_rate = (returns / total_orders) * 100
-                st.caption(f"Current Return Rate: **{rto_rate:.1f}%** (Isay 10% se neechay rakhein)")
+    with c2:
+        st.subheader("Expense Breakdown")
+        if not st.session_state.db_expenses.empty:
+            fig2 = px.pie(st.session_state.db_expenses, values='Amount', names='Type', hole=0.6, template="plotly_dark", color_discrete_sequence=px.colors.sequential.Teal)
+            fig2.update_layout(paper_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig2, use_container_width=True)
+        else:
+            st.caption("No expenses recorded yet.")
 
 # ==========================
-# 🛒 NEW ORDER (Fraud Check)
+# 🛒 NEW ORDER (Clean Form)
 # ==========================
 elif menu == "🛒 New Order (POS)":
-    st.title("Manual Order Entry 📝")
+    st.markdown("## 📝 Create New Order")
     
-    # 1. Check Customer History (Fraud Check)
-    phone_check = st.text_input("Enter Phone Number first (to check history)", placeholder="03001234567")
+    col_main, col_side = st.columns([2, 1])
     
-    if phone_check:
-        history = st.session_state.db_orders[st.session_state.db_orders['Phone'] == phone_check]
-        if not history.empty:
-            returned = len(history[history['Status'] == 'Returned (RTO)'])
-            delivered = len(history[history['Status'] == 'Delivered'])
-            if returned > 0:
-                st.error(f"⚠️ WARNING: Is customer ne pehlay **{returned}** orders wapis kiye hain!")
-            else:
-                st.success(f"✅ Safe Customer (Previously {delivered} Delivered)")
-        else:
-            st.info("🆕 New Customer")
+    with col_side:
+        st.info("💡 **Pro Tip:** Number pehlay daalain to Fraud Check khud ho jaye ga.")
+        phone_val = st.text_input("Customer Phone", placeholder="0300xxxxxxx")
+        
+        # Live Fraud Check
+        if phone_val:
+            hist = st.session_state.db_orders[st.session_state.db_orders['Phone'] == phone_val]
+            if not hist.empty:
+                rto = len(hist[hist['Status'] == 'Returned (RTO)'])
+                if rto > 0:
+                    st.error(f"⚠️ HIGH RISK! {rto} Returns.")
+                else:
+                    st.success("✅ Safe Customer.")
 
-    with st.form("new_order"):
-        c1, c2 = st.columns(2)
-        name = c1.text_input("Customer Name")
-        city = c2.selectbox("City", ["Karachi", "Lahore", "Islamabad", "Rawalpindi", "Faisalabad", "Multan", "Peshawar", "Quetta", "Other"])
-        address = st.text_area("Full Address")
-        
-        st.divider()
-        
-        if st.session_state.db_products.empty:
-            st.error("No products in inventory.")
-            st.stop()
-            
-        prod_names = st.session_state.db_products['Product Name'].tolist()
-        item = st.selectbox("Select Product", prod_names)
-        
-        # Auto Fetch Prices
-        prod_details = st.session_state.db_products[st.session_state.db_products['Product Name'] == item].iloc[0]
-        base_price = prod_details['Sale Price']
-        cost_price = prod_details['Cost Price']
-        
-        c3, c4, c5 = st.columns(3)
-        qty = c3.number_input("Quantity", min_value=1, value=1)
-        price = c4.number_input("Sale Price (Editable)", value=base_price)
-        dc = c5.number_input("Delivery Charges", value=200)
-        
-        total = (price * qty) + dc
-        st.markdown(f"### Total Bill: **Rs {total}**")
-        
-        if st.form_submit_button("Confirm Order 🚀"):
-            new_id = f"ORD-{len(st.session_state.db_orders)+1001}"
-            new_entry = {
-                "Order ID": new_id,
-                "Date": datetime.now().strftime("%Y-%m-%d"),
-                "Customer Name": name,
-                "Phone": phone_check,
-                "City": city,
-                "Address": address,
-                "Item": item,
-                "Qty": qty,
-                "Price": price,
-                "DC": dc,
-                "Total": total,
-                "Cost Price": cost_price,
-                "Status": "Pending",
-                "Courier": "Pending",
-                "Tracking ID": ""
-            }
-            st.session_state.db_orders = pd.concat([st.session_state.db_orders, pd.DataFrame([new_entry])], ignore_index=True)
-            
-            # Stock Deduct
-            idx = st.session_state.db_products.index[st.session_state.db_products['Product Name'] == item][0]
-            st.session_state.db_products.at[idx, 'Stock'] -= qty
-            
-            st.success("Order Placed Successfully!")
-
-# ==========================
-# 📦 INVENTORY
-# ==========================
-elif menu == "📦 Inventory Manager":
-    st.title("Stockroom 🏭")
-    
-    with st.expander("Add New Item"):
-        with st.form("add_prod"):
+    with col_main:
+        with st.form("clean_order_form"):
             c1, c2 = st.columns(2)
-            p_name = c1.text_input("Product Name (e.g. Life OS Planner)")
-            p_sku = c2.text_input("SKU Code (e.g. PLAN-01)")
+            name = c1.text_input("Customer Name")
+            city = c2.selectbox("City", ["Lahore", "Karachi", "Islamabad", "Faisalabad", "Multan", "Other"])
+            addr = st.text_area("Delivery Address", height=80)
             
-            c3, c4, c5 = st.columns(3)
-            p_cost = c3.number_input("Making Cost (Khareed)", min_value=0)
-            p_sale = c4.number_input("Selling Price", min_value=0)
-            p_stock = c5.number_input("Stock Qty", min_value=0)
+            st.markdown("### Cart Details")
+            if st.session_state.db_products.empty:
+                st.warning("Inventory is empty! Go to Stockroom.")
+                st.stop()
+                
+            p_list = st.session_state.db_products['Product Name'].unique()
+            item_sel = st.selectbox("Select Item", p_list)
             
-            if st.form_submit_button("Save Item"):
-                new_prod = pd.DataFrame([{
-                    "SKU": p_sku, "Product Name": p_name, "Cost Price": p_cost, 
-                    "Sale Price": p_sale, "Stock": p_stock, "Category": "General"
-                }])
-                st.session_state.db_products = pd.concat([st.session_state.db_products, new_prod], ignore_index=True)
-                st.success("Item Added!")
-
-    # Editable Table
-    st.subheader("Current Stock")
-    edited_stock = st.data_editor(st.session_state.db_products, num_rows="dynamic", use_container_width=True)
-    st.session_state.db_products = edited_stock
+            # Auto Data
+            p_data = st.session_state.db_products[st.session_state.db_products['Product Name'] == item_sel].iloc[0]
+            
+            sc1, sc2, sc3 = st.columns(3)
+            qty = sc1.number_input("Qty", 1, 100, 1)
+            price = sc2.number_input("Sale Price", value=int(p_data['Sale Price']))
+            dc = sc3.number_input("Delivery", value=200)
+            
+            total_bill = (price * qty) + dc
+            
+            st.markdown(f"""
+            <div style="background-color: #004D40; padding: 10px; border-radius: 5px; text-align: center; margin-top: 10px;">
+                <h3 style="color: white; margin:0;">Total: Rs {total_bill}</h3>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            submitted = st.form_submit_button("🚀 PLACE ORDER")
+            
+            if submitted:
+                new_entry = {
+                    "Order ID": f"ORD-{len(st.session_state.db_orders)+1001}",
+                    "Date": datetime.now().strftime("%Y-%m-%d"),
+                    "Customer Name": name, "Phone": phone_val, "City": city,
+                    "Address": addr, "Item": item_sel, "Qty": qty,
+                    "Price": price, "DC": dc, "Total": total_bill,
+                    "Cost Price": p_data['Cost Price'], "Status": "Pending"
+                }
+                st.session_state.db_orders = pd.concat([st.session_state.db_orders, pd.DataFrame([new_entry])], ignore_index=True)
+                st.success("Order Confirmed!")
 
 # ==========================
-# 🚚 ORDER OPERATIONS (The Powerhouse)
+# 📦 STOCKROOM (Inventory)
 # ==========================
-elif menu == "🚚 Order Operations":
-    st.title("Operations Hub 🚛")
+elif menu == "📦 Stockroom":
+    st.markdown("## 🏭 Inventory Management")
     
-    # Filter Tabs
-    tab1, tab2, tab3 = st.tabs(["Pending (Call Karo)", "Dispatched (Courier)", "All Orders"])
+    tab1, tab2 = st.tabs(["📋 Current Stock", "➕ Add New Item"])
     
     with tab1:
-        st.info("In logon ko call kar ke confirm karein.")
-        pending_orders = st.session_state.db_orders[st.session_state.db_orders['Status'] == 'Pending']
+        # Fancy DataFrame
+        st.dataframe(
+            st.session_state.db_products,
+            use_container_width=True,
+            column_config={
+                "Stock": st.column_config.ProgressColumn("Stock Level", format="%f", min_value=0, max_value=100),
+                "Sale Price": st.column_config.NumberColumn("Price (Rs)", format="Rs %d")
+            }
+        )
         
-        if not pending_orders.empty:
-            for i, row in pending_orders.iterrows():
-                with st.expander(f"{row['Customer Name']} - {row['City']} (Rs {row['Total']})"):
-                    c1, c2, c3 = st.columns(3)
-                    # WhatsApp Link Generator
-                    wa_msg = f"Salam {row['Customer Name']}! 👋 Hum Prime Tutors/Store se baat kar rahay hain. Apne order {row['Item']} confirm karne ke liye reply karein."
-                    wa_link = f"https://wa.me/92{row['Phone'][1:]}?text={wa_msg.replace(' ', '%20')}"
-                    
-                    c1.markdown(f"[💬 WhatsApp Karo]({wa_link})")
-                    
-                    if c2.button("✅ Confirm", key=f"conf_{i}"):
-                        idx = st.session_state.db_orders[st.session_state.db_orders['Order ID'] == row['Order ID']].index[0]
-                        st.session_state.db_orders.at[idx, 'Status'] = 'Confirmed'
-                        st.experimental_rerun()
-                        
-                    if c3.button("❌ Cancel", key=f"can_{i}"):
-                        idx = st.session_state.db_orders[st.session_state.db_orders['Order ID'] == row['Order ID']].index[0]
-                        st.session_state.db_orders.at[idx, 'Status'] = 'Cancelled'
-                        st.experimental_rerun()
-        else:
-            st.success("No Pending Orders! Good job.")
-
     with tab2:
-        st.subheader("Courier Bulk Upload Generator")
-        st.write("Trax/Leopards/TCS ke portal par upload karne ke liye file download karein.")
-        
-        confirmed_orders = st.session_state.db_orders[st.session_state.db_orders['Status'] == 'Confirmed']
-        if not confirmed_orders.empty:
-            # Create a CSV format that couriers usually accept
-            courier_csv = confirmed_orders[['Customer Name', 'Phone', 'Address', 'City', 'Total', 'Item', 'Qty', 'Order ID']]
-            courier_csv.columns = ['Consignee Name', 'Consignee Phone', 'Address', 'City', 'COD Amount', 'Product', 'Pieces', 'Order Ref']
+        with st.form("add_stock"):
+            c1, c2 = st.columns(2)
+            name = c1.text_input("Product Name")
+            sku = c2.text_input("SKU")
+            c3, c4, c5 = st.columns(3)
+            cost = c3.number_input("Cost", 0)
+            sale = c4.number_input("Sale Price", 0)
+            stock = c5.number_input("Stock Qty", 0)
             
-            csv = courier_csv.to_csv(index=False).encode('utf-8')
-            
-            st.download_button(
-                "⬇️ Download Courier CSV",
-                csv,
-                "trax_bulk_upload.csv",
-                "text/csv",
-                key='download-csv'
-            )
-            
-            if st.button("Mark All as Dispatched"):
-                # Bulk update status
-                indices = st.session_state.db_orders[st.session_state.db_orders['Status'] == 'Confirmed'].index
-                st.session_state.db_orders.loc[indices, 'Status'] = 'Dispatched'
-                st.success("Orders marked as Dispatched!")
-                st.experimental_rerun()
-        else:
-            st.warning("Pehle orders ko 'Pending' tab mein Confirm karein.")
-
-    with tab3:
-        st.dataframe(st.session_state.db_orders)
+            if st.form_submit_button("Save Item"):
+                new_prod = {"SKU": sku, "Product Name": name, "Cost Price": cost, "Sale Price": sale, "Stock": stock, "Category": "General"}
+                st.session_state.db_products = pd.concat([st.session_state.db_products, pd.DataFrame([new_prod])], ignore_index=True)
+                st.success(f"{name} added to stock!")
 
 # ==========================
-# 💸 MARKETING & EXPENSES
+# 🚚 DISPATCH CENTER
 # ==========================
-elif menu == "💸 Marketing & Expenses":
-    st.title("Expense Tracker 📉")
+elif menu == "🚚 Dispatch Center":
+    st.markdown("## 🚛 Order Operations")
     
-    with st.form("add_exp"):
-        c1, c2, c3 = st.columns(3)
-        date = c1.date_input("Date")
-        category = c2.selectbox("Type", ["Meta Ads", "Packaging", "Salary", "Food/Misc", "RTO Charges"])
-        amount = c3.number_input("Amount (Rs)", min_value=0)
-        desc = st.text_input("Description (e.g. Adset Testing)")
-        
-        if st.form_submit_button("Add Expense"):
-            new_exp = pd.DataFrame([{"Date": date, "Type": category, "Description": desc, "Amount": amount}])
-            st.session_state.db_expenses = pd.concat([st.session_state.db_expenses, new_exp], ignore_index=True)
-            st.success("Kharcha Note Ho Gaya!")
+    st.markdown("#### Pending Orders")
+    pending = st.session_state.db_orders[st.session_state.db_orders['Status'] == 'Pending']
+    
+    if not pending.empty:
+        for idx, row in pending.iterrows():
+            with st.expander(f"{row['Order ID']} | {row['Customer Name']} | Rs {row['Total']}"):
+                c1, c2 = st.columns([3, 1])
+                c1.write(f"**Item:** {row['Item']} (x{row['Qty']})")
+                c1.write(f"**Address:** {row['Address']}, {row['City']}")
+                
+                # Action Buttons
+                col_btn1, col_btn2, col_btn3 = c2.columns(3)
+                
+                # WhatsApp
+                wa_link = f"https://wa.me/92{str(row['Phone'])[1:]}?text=Salam {row['Customer Name']}, order confirm karein?"
+                col_btn1.link_button("💬", wa_link)
+                
+                if col_btn2.button("✅", key=f"ok_{idx}"):
+                    real_idx = st.session_state.db_orders[st.session_state.db_orders['Order ID'] == row['Order ID']].index[0]
+                    st.session_state.db_orders.at[real_idx, 'Status'] = 'Dispatched'
+                    st.rerun()
+                    
+                if col_btn3.button("❌", key=f"no_{idx}"):
+                    real_idx = st.session_state.db_orders[st.session_state.db_orders['Order ID'] == row['Order ID']].index[0]
+                    st.session_state.db_orders.at[real_idx, 'Status'] = 'Cancelled'
+                    st.rerun()
+    else:
+        st.info("No pending orders. Chill karein! ☕")
 
-    st.divider()
+# ==========================
+# 💸 FINANCE (Ads Tracker)
+# ==========================
+elif menu == "💸 Finance & Ads":
+    st.markdown("## 📉 Expense & Ads Tracker")
     
-    # Ad Spend Analysis
+    with st.expander("➕ Add New Expense", expanded=True):
+        with st.form("exp_input"):
+            c1, c2, c3 = st.columns(3)
+            date = c1.date_input("Date")
+            cat = c2.selectbox("Category", ["Meta Ads", "Packaging", "Salary", "Food", "RTO Charges"])
+            amt = c3.number_input("Amount", 100)
+            
+            if st.form_submit_button("Add Expense"):
+                new_exp = {"Date": date, "Type": cat, "Description": "-", "Amount": amt}
+                st.session_state.db_expenses = pd.concat([st.session_state.db_expenses, pd.DataFrame([new_exp])], ignore_index=True)
+                st.success("Added!")
+    
     if not st.session_state.db_expenses.empty:
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Expense Breakdown")
-            fig = px.pie(st.session_state.db_expenses, values='Amount', names='Type', template="plotly_dark")
-            st.plotly_chart(fig)
-            
-        with col2:
-            # Calculate CPA (Cost Per Acquisition)
-            total_ads = st.session_state.db_expenses[st.session_state.db_expenses['Type'] == 'Meta Ads']['Amount'].sum()
-            total_orders = len(st.session_state.db_orders)
-            if total_orders > 0:
-                cpa = total_ads / total_orders
-                st.metric("CPA (Cost Per Order)", f"Rs {cpa:.0f}", help="Aik order lanay par kitna kharcha hua")
-            else:
-                st.metric("CPA", "N/A")
+        st.dataframe(st.session_state.db_expenses, use_container_width=True)
