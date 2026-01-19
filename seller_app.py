@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 from datetime import datetime
 import pytz 
 import time
@@ -20,12 +19,12 @@ def check_password():
             st.session_state["password_correct"] = False
 
     if "password_correct" not in st.session_state:
-        st.markdown("<h1 style='text-align:center; color:#3E64FF;'>📦 E-Com Manager</h1>", unsafe_allow_html=True)
-        st.text_input("Admin ID", key="username")
+        st.markdown("<h1 style='text-align:center; color:#FF4B4B;'>🚀 E-Com Scale Up</h1>", unsafe_allow_html=True)
+        st.text_input("Admin Login", key="username")
         st.text_input("Password", type="password", on_change=password_entered, key="password")
         return False
     elif not st.session_state["password_correct"]:
-        st.text_input("Admin ID", key="username")
+        st.text_input("Admin Login", key="username")
         st.text_input("Password", type="password", on_change=password_entered, key="password")
         st.error("🔒 Access Denied")
         return False
@@ -33,12 +32,10 @@ def check_password():
         return True
 
 # --- 1. CONFIG & AUTH ---
-st.set_page_config(page_title="E-Com Dashboard", page_icon="📦", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="E-Com Pro", page_icon="🚀", layout="wide", initial_sidebar_state="expanded")
 
 if not check_password():
     st.stop()
-
-current_user = st.session_state["logged_in_user"]
 
 # --- 2. FIREBASE CONNECTION ---
 if not firebase_admin._apps:
@@ -53,7 +50,7 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
-# --- 3. DATABASE FUNCTIONS (ECOMMERCE LOGIC) ---
+# --- 3. DATABASE FUNCTIONS ---
 def get_products():
     docs = db.collection("products").stream()
     return [{"id": d.id, **d.to_dict()} for d in docs]
@@ -64,62 +61,90 @@ def add_product(name, price, cost, stock, sku):
         "stock": int(stock), "sku": sku
     })
 
-def create_order(customer_name, phone, address, items, subtotal, delivery_fee, total, source, status="Pending"):
+def adjust_stock_manually(product_id, qty, reason):
+    # For offline sales or restock
+    ref = db.collection("products").document(product_id)
+    curr = ref.get().to_dict()
+    if curr:
+        new_stock = int(curr.get('stock', 0)) + int(qty) # qty can be negative for deduction
+        ref.update({"stock": new_stock})
+        # Log this adjustment
+        tz = pytz.timezone('Asia/Karachi')
+        db.collection("stock_logs").add({
+            "date": str(datetime.now(tz)),
+            "product": curr['name'],
+            "change": qty,
+            "reason": reason,
+            "timestamp": firestore.SERVER_TIMESTAMP
+        })
+
+def create_order(customer, phone, address, items, subtotal, delivery_charged, actual_shipping_cost, packaging_cost, total, source):
     tz = pytz.timezone('Asia/Karachi')
-    # Calculate total cost for profit tracking
-    total_cost = sum([item['cost'] * item['qty'] for item in items])
-    estimated_profit = subtotal - total_cost
     
+    # Cost Calculations
+    product_cost = sum([item['cost'] * item['qty'] for item in items])
+    total_expense_on_order = product_cost + actual_shipping_cost + packaging_cost
+    
+    # Net Profit on this order
+    net_profit = total - total_expense_on_order
+    
+    # 1. Save Order
     db.collection("orders").add({
         "date": str(datetime.now(tz)),
-        "customer": customer_name,
+        "customer": customer,
         "phone": phone,
         "address": address,
         "items": items,
         "subtotal": int(subtotal),
-        "delivery_fee": int(delivery_fee),
-        "total": int(total),
-        "total_cost": int(total_cost),
-        "profit": int(estimated_profit),
-        "source": source, # WhatsApp, Insta, Web
-        "status": status, # Pending, Shipped, Delivered, Returned, Cancelled
+        "delivery_charged": int(delivery_charged), # Customer paid this
+        "actual_shipping_cost": int(actual_shipping_cost), # You paid courier this
+        "packaging_cost": int(packaging_cost), # Flyer/Box cost
+        "total": int(total), # COD Amount
+        "net_profit": int(net_profit),
+        "source": source,
+        "status": "Pending",
+        "timestamp": firestore.SERVER_TIMESTAMP
+    })
+    
+    # 2. Auto-Deduct Stock
+    for item in items:
+        adjust_stock_manually(item['id'], -item['qty'], "Online Order")
+
+def log_general_expense(desc, amount, category):
+    # Marketing ads, Office rent, etc.
+    tz = pytz.timezone('Asia/Karachi')
+    db.collection("expenses").add({
+        "date": str(datetime.now(tz)),
+        "desc": desc,
+        "amount": int(amount),
+        "category": category, # Marketing, Operations, etc.
         "timestamp": firestore.SERVER_TIMESTAMP
     })
 
-def update_order_status(order_id, new_status):
-    db.collection("orders").document(order_id).update({"status": new_status})
-
-def get_orders():
-    docs = db.collection("orders").order_by("timestamp", direction=firestore.Query.DESCENDING).limit(100).stream()
+def get_data(collection, limit=100):
+    docs = db.collection(collection).order_by("timestamp", direction=firestore.Query.DESCENDING).limit(limit).stream()
     return [{"id": d.id, **d.to_dict()} for d in docs]
 
-# --- 4. MODERN UI STYLING ---
+# --- 4. UI STYLING ---
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;600&display=swap');
-    .stApp { background-color: #f4f6f9; font-family: 'Inter', sans-serif; color: #333; }
-    
-    .stat-card {
+    .stApp { background-color: #FAFAFA; color: #333; }
+    .kpi-card {
         background: white; padding: 20px; border-radius: 12px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-left: 5px solid #3E64FF;
+        border: 1px solid #E0E0E0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
-    .stat-val { font-size: 24px; font-weight: bold; color: #2c3e50; }
-    .stat-label { font-size: 14px; color: #7f8c8d; }
-    
-    /* Status Badges */
-    .status-Pending { color: #e67e22; font-weight: bold; }
-    .status-Shipped { color: #3498db; font-weight: bold; }
-    .status-Delivered { color: #27ae60; font-weight: bold; }
-    .status-Returned { color: #c0392b; font-weight: bold; }
-    
+    .kpi-title { font-size: 14px; color: #757575; }
+    .kpi-val { font-size: 26px; font-weight: 700; color: #333; }
+    .success-val { color: #2E7D32; }
+    .danger-val { color: #D32F2F; }
     .stButton>button { border-radius: 8px; font-weight: 600; }
 </style>
 """, unsafe_allow_html=True)
 
 # --- 5. SIDEBAR ---
 with st.sidebar:
-    st.title("📦 Admin Ops")
-    menu = st.radio("Navigate", ["📊 Dashboard", "📝 New Order", "🚚 Order Manager", "📦 Inventory"])
+    st.title("🚀 E-Com Ops")
+    menu = st.radio("Menu", ["📊 Profit Dashboard", "📝 New Order", "💸 Expenses (Ads/Ops)", "📦 Inventory & Stock", "🚚 Order Manager"])
     st.write("---")
     if st.button("Logout"):
         del st.session_state["password_correct"]
@@ -127,139 +152,508 @@ with st.sidebar:
 
 # --- 6. MODULES ---
 
-# === DASHBOARD ===
-if menu == "📊 Dashboard":
-    st.subheader("Business Pulse 📉")
-    orders = get_orders()
+# === PROFIT DASHBOARD ===
+if menu == "📊 Profit Dashboard":
+    st.subheader("Real Net Profit Report 📉")
     
-    pending = 0
-    shipped = 0
-    revenue = 0
-    profit = 0
+    orders = get_data("orders")
+    expenses = get_data("expenses")
+    
+    # Calculations
+    total_sales = 0
+    gross_profit_orders = 0
+    total_marketing = 0
+    total_ops = 0
     
     if orders:
-        df = pd.DataFrame(orders)
-        pending = len(df[df['status'] == 'Pending'])
-        shipped = len(df[df['status'] == 'Shipped'])
-        # Revenue only from Delivered orders usually, but let's track Total Value for now
-        delivered_df = df[df['status'] == 'Delivered']
-        if not delivered_df.empty:
-            revenue = delivered_df['total'].sum()
-            profit = delivered_df['profit'].sum()
+        df_ord = pd.DataFrame(orders)
+        # Only count Delivered/Shipped for 'Realized' profit, or All for 'Projected'
+        # Let's show All for now but usually we filter by 'Delivered'
+        total_sales = df_ord['total'].sum()
+        gross_profit_orders = df_ord['net_profit'].sum() # This already has product + shipping + packaging deducted
     
+    if expenses:
+        df_exp = pd.DataFrame(expenses)
+        total_marketing = df_exp[df_exp['category'] == 'Marketing (Ads)']['amount'].sum()
+        total_ops = df_exp[df_exp['category'] != 'Marketing (Ads)']['amount'].sum()
+    
+    final_net_profit = gross_profit_orders - total_marketing - total_ops
+    
+    # KPI ROW 1
     c1, c2, c3, c4 = st.columns(4)
-    c1.markdown(f"<div class='stat-card'><div class='stat-label'>Orders Pending</div><div class='stat-val' style='color:#e67e22'>{pending}</div></div>", unsafe_allow_html=True)
-    c2.markdown(f"<div class='stat-card'><div class='stat-label'>To Be Delivered</div><div class='stat-val' style='color:#3498db'>{shipped}</div></div>", unsafe_allow_html=True)
-    c3.markdown(f"<div class='stat-card'><div class='stat-label'>Realized Revenue</div><div class='stat-val'>Rs {revenue:,}</div></div>", unsafe_allow_html=True)
-    c4.markdown(f"<div class='stat-card' style='border-color:#27ae60'><div class='stat-label'>Net Profit</div><div class='stat-val' style='color:#27ae60'>Rs {profit:,}</div></div>", unsafe_allow_html=True)
+    c1.markdown(f"<div class='kpi-card'><div class='kpi-title'>Total Sales (COD)</div><div class='kpi-val'>Rs {total_sales:,}</div></div>", unsafe_allow_html=True)
+    c2.markdown(f"<div class='kpi-card'><div class='kpi-title'>Order Gross Profit</div><div class='kpi-val success-val'>Rs {gross_profit_orders:,}</div></div>", unsafe_allow_html=True)
+    c3.markdown(f"<div class='kpi-card'><div class='kpi-title'>Marketing Spend</div><div class='kpi-val danger-val'>Rs {total_marketing:,}</div></div>", unsafe_allow_html=True)
+    c4.markdown(f"<div class='kpi-card'><div class='kpi-title'>🔥 REAL NET PROFIT</div><div class='kpi-val success-val'>Rs {final_net_profit:,}</div></div>", unsafe_allow_html=True)
+    
+    st.info("💡 **Formula:** (Order Revenue - Product Cost - Shipping - Packaging) - (Ads + Other Expenses)")
 
-    if orders:
-        st.write("### 📦 Recent Order Flow")
-        st.dataframe(pd.DataFrame(orders)[['date', 'customer', 'total', 'status', 'source']], use_container_width=True)
-
-# === NEW ORDER ENTRY ===
+# === NEW ORDER ===
 elif menu == "📝 New Order":
-    st.subheader("Manual Order Entry (WhatsApp/Insta)")
+    st.subheader("Create Order 📦")
     
+    col1, col2 = st.columns(2)
     products = get_products()
-    p_names = [p['name'] for p in products if p['stock'] > 0]
+    p_names = [p['name'] for p in products if p.get('stock', 0) > 0]
     
-    col1, col2 = st.columns([1, 1])
+    if 'cart_adv' not in st.session_state: st.session_state.cart_adv = []
     
     with col1:
         with st.container(border=True):
-            st.markdown("##### 🛒 Cart Details")
-            if 'ecom_cart' not in st.session_state: st.session_state.ecom_cart = []
-            
-            sel_p_name = st.selectbox("Select Product", ["Choose..."] + p_names)
-            if sel_p_name != "Choose...":
-                sel_p = next(p for p in products if p['name'] == sel_p_name)
-                qty = st.number_input("Quantity", 1, 100, 1)
-                if st.button("Add Item"):
-                    st.session_state.ecom_cart.append({
-                        "id": sel_p['id'], "name": sel_p['name'],
-                        "price": sel_p['price'], "cost": sel_p['cost'], "qty": qty,
-                        "subtotal": sel_p['price'] * qty
+            st.markdown("##### 1. Select Products")
+            sel_p = st.selectbox("Product", ["Select..."] + p_names)
+            if sel_p != "Select...":
+                prod_obj = next(p for p in products if p['name'] == sel_p)
+                qty = st.number_input("Qty", 1, 100, 1)
+                if st.button("Add to Order"):
+                    st.session_state.cart_adv.append({
+                        "id": prod_obj['id'], "name": prod_obj['name'],
+                        "price": prod_obj['price'], "cost": prod_obj['cost'], "qty": qty,
+                        "subtotal": prod_obj['price'] * qty
                     })
             
-            # Show Cart
-            if st.session_state.ecom_cart:
-                cart_df = pd.DataFrame(st.session_state.ecom_cart)
-                st.dataframe(cart_df[['name', 'qty', 'subtotal']], hide_index=True)
-                if st.button("Clear Cart"): st.session_state.ecom_cart = []
+            # Cart Display
+            if st.session_state.cart_adv:
+                st.dataframe(pd.DataFrame(st.session_state.cart_adv)[['name', 'qty', 'subtotal']], hide_index=True)
+                if st.button("Clear Cart"): st.session_state.cart_adv = []
 
     with col2:
-        with st.container(border=True):
-            st.markdown("##### 👤 Customer & Delivery")
-            cust_name = st.text_input("Customer Name")
-            phone = st.text_input("Phone Number")
-            address = st.text_area("Shipping Address")
-            source = st.selectbox("Order Source", ["WhatsApp", "Instagram", "Website", "Call"])
+        with st.form("order_details"):
+            st.markdown("##### 2. Customer & Costs")
+            cust = st.text_input("Customer Name")
+            phone = st.text_input("Phone")
+            addr = st.text_area("Address")
+            src = st.selectbox("Source", ["Facebook Ad", "Instagram", "WhatsApp", "Website"])
             
-            # Financials
-            subtotal = sum([item['subtotal'] for item in st.session_state.ecom_cart])
-            delivery = st.number_input("Delivery Charges", value=200)
-            final_total = subtotal + delivery
+            st.divider()
+            st.markdown("##### 💰 Financials")
             
-            st.markdown(f"### Total COD: Rs {final_total}")
+            # Auto Calc Subtotal
+            sub_t = sum([i['subtotal'] for i in st.session_state.cart_adv])
+            st.write(f"Product Total: Rs {sub_t}")
             
-            if st.button("🚀 Place Order", type="primary"):
-                if not st.session_state.ecom_cart or not cust_name:
-                    st.error("Cart is empty or Customer Name missing!")
-                else:
-                    create_order(cust_name, phone, address, st.session_state.ecom_cart, subtotal, delivery, final_total, source)
-                    st.session_state.ecom_cart = []
-                    st.success("Order Created Successfully! Check Order Manager.")
+            # --- PROFIT KILLERS ---
+            c_a, c_b = st.columns(2)
+            del_charged = c_a.number_input("Delivery (Customer Pays)", value=200)
+            ship_cost = c_b.number_input("Actual Courier Cost (You Pay)", value=180, help="TCS/Leopard cost")
+            
+            pack_cost = st.number_input("Packaging Cost (Flyer/Box)", value=15)
+            
+            final_cod = sub_t + del_charged
+            st.markdown(f"### COD Amount: Rs {final_cod}")
+            
+            if st.form_submit_button("🚀 Confirm Order"):
+                if st.session_state.cart_adv and cust:
+                    create_order(cust, phone, addr, st.session_state.cart_adv, sub_t, del_charged, ship_cost, pack_cost, final_cod, src)
+                    st.session_state.cart_adv = []
+                    st.success("Order Created! Stock Deducted.")
                     time.sleep(1)
                     st.rerun()
+                else:
+                    st.error("Cart empty or details missing.")
+
+# === EXPENSES ===
+elif menu == "💸 Expenses (Ads/Ops)":
+    st.subheader("Marketing & Overheads 💸")
+    
+    with st.form("exp_form"):
+        c1, c2 = st.columns(2)
+        desc = c1.text_input("Description (e.g. Facebook Ad Budget)")
+        amt = c2.number_input("Amount (Rs)", min_value=1)
+        cat = st.selectbox("Category", ["Marketing (Ads)", "Packaging Material (Bulk)", "Internet/Load", "Office Rent", "Other"])
+        
+        if st.form_submit_button("Log Expense"):
+            log_general_expense(desc, amt, cat)
+            st.success("Expense Logged.")
+            time.sleep(1)
+            st.rerun()
+            
+    # Show Recent Expenses
+    exps = get_data("expenses")
+    if exps:
+        st.write("### Recent Spending")
+        st.dataframe(pd.DataFrame(exps)[['date', 'category', 'desc', 'amount']], use_container_width=True)
+
+# === INVENTORY & STOCK ===
+elif menu == "📦 Inventory & Stock":
+    st.subheader("Hybrid Inventory Manager 🏪")
+    
+    tab1, tab2 = st.tabs(["Stock Adjustment (Offline)", "Product Catalog"])
+    
+    with tab1:
+        st.info("Agar 'Offline Sale' hui hai ya stock damage hua hai, yahan adjust karein.")
+        prods = get_products()
+        p_list = [p['name'] for p in prods]
+        
+        c1, c2, c3 = st.columns(3)
+        sel_prod = c1.selectbox("Select Product", p_list)
+        action = c2.radio("Action", ["Reduce Stock (Sale/Damage)", "Add Stock (Restock)"])
+        qty_adj = c3.number_input("Quantity", min_value=1, value=1)
+        
+        if st.button("Update Stock"):
+            target_p = next(p for p in prods if p['name'] == sel_prod)
+            final_qty = -qty_adj if "Reduce" in action else qty_adj
+            reason = "Offline Sale/Manual" if "Reduce" in action else "Restock"
+            
+            adjust_stock_manually(target_p['id'], final_qty, reason)
+            st.success(f"Stock Updated: {action} {qty_adj}")
+            time.sleep(1)
+            st.rerun()
+
+    with tab2:
+        with st.expander("➕ Add New Product"):
+            with st.form("new_p"):
+                name = st.text_input("Name")
+                sku = st.text_input("SKU")
+                pr = st.number_input("Sale Price", min_value=0)
+                co = st.number_input("Cost Price", min_value=0)
+                stk = st.number_input("Stock", min_value=1)
+                if st.form_submit_button("Save"):
+                    add_product(name, pr, co, stk, sku)
+                    st.success("Saved")
+                    st.rerun()
+        
+        if prods:
+            df = pd.DataFrame(prods)
+            st.dataframe(df[['name', 'stock', 'price', 'cost', 'sku']], use_container_width=True)
 
 # === ORDER MANAGER ===
 elif menu == "🚚 Order Manager":
-    st.subheader("Manage Shipments")
-    
-    orders = get_orders()
+    st.subheader("Track Orders")
+    orders = get_data("orders")
     if orders:
-        # Filter options
-        status_filter = st.selectbox("Filter by Status", ["All", "Pending", "Shipped", "Delivered", "Returned"])
-        
         for o in orders:
-            if status_filter == "All" or o['status'] == status_filter:
-                with st.expander(f"{o['date']} | {o['customer']} | Rs {o['total']} ({o['status']})"):
-                    c1, c2 = st.columns([3, 1])
-                    with c1:
-                        st.write(f"**Items:** {[i['name'] + ' x' + str(i['qty']) for i in o['items']]}")
-                        st.write(f"**Address:** {o.get('address', 'N/A')}")
-                        st.write(f"**Phone:** {o.get('phone', 'N/A')}")
-                        st.caption(f"Source: {o.get('source', 'Unknown')}")
-                    with c2:
-                        current_status = o['status']
-                        new_status = st.selectbox("Update Status", 
-                                                  ["Pending", "Shipped", "Delivered", "Returned", "Cancelled"], 
-                                                  key=f"st_{o['id']}", index=["Pending", "Shipped", "Delivered", "Returned", "Cancelled"].index(current_status))
-                        
-                        if new_status != current_status:
-                            update_order_status(o['id'], new_status)
-                            st.toast(f"Status updated to {new_status}")
-                            time.sleep(1)
-                            st.rerun()
-    else:
-        st.info("No active orders.")
+            with st.expander(f"{o['date']} | {o['customer']} | Profit: Rs {o.get('net_profit', 0)}"):
+                st.write(f"**Items:** {[i['name'] for i in o['items']]}")
+                st.write(f"Status: **{o['status']}**")
+                # Profit Breakdown
+                st.caption(f"Breakdown: Revenue {o['total']} - (Prod Cost + Shipping {o.get('actual_shipping_cost',0)} + Pack {o.get('packaging_cost',0)}) = Profit {o.get('net_profit',0)}")import streamlit as st
+import pandas as pd
+from datetime import datetime
+import pytz 
+import time
+import json
+import firebase_admin
+from firebase_admin import credentials, firestore
 
-# === INVENTORY ===
-elif menu == "📦 Inventory":
-    st.subheader("Product Catalog")
-    with st.expander("Add New Product"):
-        with st.form("new_prod"):
-            c1, c2 = st.columns(2)
-            name = c1.text_input("Product Name")
-            sku = c2.text_input("SKU Code (Optional)")
-            price = c1.number_input("Selling Price", min_value=0)
-            cost = c2.number_input("Cost Price", min_value=0)
-            stock = st.number_input("Stock Qty", min_value=1)
-            if st.form_submit_button("Add to Catalog"):
-                add_product(name, price, cost, stock, sku)
-                st.success("Product Added")
-                st.rerun()
+# --- 0. LOGIN SYSTEM ---
+def check_password():
+    def password_entered():
+        if st.session_state["username"] in st.secrets["passwords"] and \
+           st.session_state["password"] == st.secrets["passwords"][st.session_state["username"]]:
+            st.session_state["password_correct"] = True
+            st.session_state["logged_in_user"] = st.session_state["username"]
+            del st.session_state["password"] 
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        st.markdown("<h1 style='text-align:center; color:#FF4B4B;'>🚀 E-Com Scale Up</h1>", unsafe_allow_html=True)
+        st.text_input("Admin Login", key="username")
+        st.text_input("Password", type="password", on_change=password_entered, key="password")
+        return False
+    elif not st.session_state["password_correct"]:
+        st.text_input("Admin Login", key="username")
+        st.text_input("Password", type="password", on_change=password_entered, key="password")
+        st.error("🔒 Access Denied")
+        return False
+    else:
+        return True
+
+# --- 1. CONFIG & AUTH ---
+st.set_page_config(page_title="E-Com Pro", page_icon="🚀", layout="wide", initial_sidebar_state="expanded")
+
+if not check_password():
+    st.stop()
+
+# --- 2. FIREBASE CONNECTION ---
+if not firebase_admin._apps:
+    try:
+        key_content = st.secrets["firebase"]["my_key"]
+        key_dict = json.loads(key_content)
+        cred = credentials.Certificate(key_dict)
+        firebase_admin.initialize_app(cred)
+    except Exception as e:
+        st.error(f"🚨 DB Error: {e}")
+        st.stop()
+
+db = firestore.client()
+
+# --- 3. DATABASE FUNCTIONS ---
+def get_products():
+    docs = db.collection("products").stream()
+    return [{"id": d.id, **d.to_dict()} for d in docs]
+
+def add_product(name, price, cost, stock, sku):
+    db.collection("products").add({
+        "name": name, "price": int(price), "cost": int(cost), 
+        "stock": int(stock), "sku": sku
+    })
+
+def adjust_stock_manually(product_id, qty, reason):
+    # For offline sales or restock
+    ref = db.collection("products").document(product_id)
+    curr = ref.get().to_dict()
+    if curr:
+        new_stock = int(curr.get('stock', 0)) + int(qty) # qty can be negative for deduction
+        ref.update({"stock": new_stock})
+        # Log this adjustment
+        tz = pytz.timezone('Asia/Karachi')
+        db.collection("stock_logs").add({
+            "date": str(datetime.now(tz)),
+            "product": curr['name'],
+            "change": qty,
+            "reason": reason,
+            "timestamp": firestore.SERVER_TIMESTAMP
+        })
+
+def create_order(customer, phone, address, items, subtotal, delivery_charged, actual_shipping_cost, packaging_cost, total, source):
+    tz = pytz.timezone('Asia/Karachi')
     
-    prods = get_products()
-    if prods: st.dataframe(pd.DataFrame(prods))
+    # Cost Calculations
+    product_cost = sum([item['cost'] * item['qty'] for item in items])
+    total_expense_on_order = product_cost + actual_shipping_cost + packaging_cost
+    
+    # Net Profit on this order
+    net_profit = total - total_expense_on_order
+    
+    # 1. Save Order
+    db.collection("orders").add({
+        "date": str(datetime.now(tz)),
+        "customer": customer,
+        "phone": phone,
+        "address": address,
+        "items": items,
+        "subtotal": int(subtotal),
+        "delivery_charged": int(delivery_charged), # Customer paid this
+        "actual_shipping_cost": int(actual_shipping_cost), # You paid courier this
+        "packaging_cost": int(packaging_cost), # Flyer/Box cost
+        "total": int(total), # COD Amount
+        "net_profit": int(net_profit),
+        "source": source,
+        "status": "Pending",
+        "timestamp": firestore.SERVER_TIMESTAMP
+    })
+    
+    # 2. Auto-Deduct Stock
+    for item in items:
+        adjust_stock_manually(item['id'], -item['qty'], "Online Order")
+
+def log_general_expense(desc, amount, category):
+    # Marketing ads, Office rent, etc.
+    tz = pytz.timezone('Asia/Karachi')
+    db.collection("expenses").add({
+        "date": str(datetime.now(tz)),
+        "desc": desc,
+        "amount": int(amount),
+        "category": category, # Marketing, Operations, etc.
+        "timestamp": firestore.SERVER_TIMESTAMP
+    })
+
+def get_data(collection, limit=100):
+    docs = db.collection(collection).order_by("timestamp", direction=firestore.Query.DESCENDING).limit(limit).stream()
+    return [{"id": d.id, **d.to_dict()} for d in docs]
+
+# --- 4. UI STYLING ---
+st.markdown("""
+<style>
+    .stApp { background-color: #FAFAFA; color: #333; }
+    .kpi-card {
+        background: white; padding: 20px; border-radius: 12px;
+        border: 1px solid #E0E0E0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .kpi-title { font-size: 14px; color: #757575; }
+    .kpi-val { font-size: 26px; font-weight: 700; color: #333; }
+    .success-val { color: #2E7D32; }
+    .danger-val { color: #D32F2F; }
+    .stButton>button { border-radius: 8px; font-weight: 600; }
+</style>
+""", unsafe_allow_html=True)
+
+# --- 5. SIDEBAR ---
+with st.sidebar:
+    st.title("🚀 E-Com Ops")
+    menu = st.radio("Menu", ["📊 Profit Dashboard", "📝 New Order", "💸 Expenses (Ads/Ops)", "📦 Inventory & Stock", "🚚 Order Manager"])
+    st.write("---")
+    if st.button("Logout"):
+        del st.session_state["password_correct"]
+        st.rerun()
+
+# --- 6. MODULES ---
+
+# === PROFIT DASHBOARD ===
+if menu == "📊 Profit Dashboard":
+    st.subheader("Real Net Profit Report 📉")
+    
+    orders = get_data("orders")
+    expenses = get_data("expenses")
+    
+    # Calculations
+    total_sales = 0
+    gross_profit_orders = 0
+    total_marketing = 0
+    total_ops = 0
+    
+    if orders:
+        df_ord = pd.DataFrame(orders)
+        # Only count Delivered/Shipped for 'Realized' profit, or All for 'Projected'
+        # Let's show All for now but usually we filter by 'Delivered'
+        total_sales = df_ord['total'].sum()
+        gross_profit_orders = df_ord['net_profit'].sum() # This already has product + shipping + packaging deducted
+    
+    if expenses:
+        df_exp = pd.DataFrame(expenses)
+        total_marketing = df_exp[df_exp['category'] == 'Marketing (Ads)']['amount'].sum()
+        total_ops = df_exp[df_exp['category'] != 'Marketing (Ads)']['amount'].sum()
+    
+    final_net_profit = gross_profit_orders - total_marketing - total_ops
+    
+    # KPI ROW 1
+    c1, c2, c3, c4 = st.columns(4)
+    c1.markdown(f"<div class='kpi-card'><div class='kpi-title'>Total Sales (COD)</div><div class='kpi-val'>Rs {total_sales:,}</div></div>", unsafe_allow_html=True)
+    c2.markdown(f"<div class='kpi-card'><div class='kpi-title'>Order Gross Profit</div><div class='kpi-val success-val'>Rs {gross_profit_orders:,}</div></div>", unsafe_allow_html=True)
+    c3.markdown(f"<div class='kpi-card'><div class='kpi-title'>Marketing Spend</div><div class='kpi-val danger-val'>Rs {total_marketing:,}</div></div>", unsafe_allow_html=True)
+    c4.markdown(f"<div class='kpi-card'><div class='kpi-title'>🔥 REAL NET PROFIT</div><div class='kpi-val success-val'>Rs {final_net_profit:,}</div></div>", unsafe_allow_html=True)
+    
+    st.info("💡 **Formula:** (Order Revenue - Product Cost - Shipping - Packaging) - (Ads + Other Expenses)")
+
+# === NEW ORDER ===
+elif menu == "📝 New Order":
+    st.subheader("Create Order 📦")
+    
+    col1, col2 = st.columns(2)
+    products = get_products()
+    p_names = [p['name'] for p in products if p.get('stock', 0) > 0]
+    
+    if 'cart_adv' not in st.session_state: st.session_state.cart_adv = []
+    
+    with col1:
+        with st.container(border=True):
+            st.markdown("##### 1. Select Products")
+            sel_p = st.selectbox("Product", ["Select..."] + p_names)
+            if sel_p != "Select...":
+                prod_obj = next(p for p in products if p['name'] == sel_p)
+                qty = st.number_input("Qty", 1, 100, 1)
+                if st.button("Add to Order"):
+                    st.session_state.cart_adv.append({
+                        "id": prod_obj['id'], "name": prod_obj['name'],
+                        "price": prod_obj['price'], "cost": prod_obj['cost'], "qty": qty,
+                        "subtotal": prod_obj['price'] * qty
+                    })
+            
+            # Cart Display
+            if st.session_state.cart_adv:
+                st.dataframe(pd.DataFrame(st.session_state.cart_adv)[['name', 'qty', 'subtotal']], hide_index=True)
+                if st.button("Clear Cart"): st.session_state.cart_adv = []
+
+    with col2:
+        with st.form("order_details"):
+            st.markdown("##### 2. Customer & Costs")
+            cust = st.text_input("Customer Name")
+            phone = st.text_input("Phone")
+            addr = st.text_area("Address")
+            src = st.selectbox("Source", ["Facebook Ad", "Instagram", "WhatsApp", "Website"])
+            
+            st.divider()
+            st.markdown("##### 💰 Financials")
+            
+            # Auto Calc Subtotal
+            sub_t = sum([i['subtotal'] for i in st.session_state.cart_adv])
+            st.write(f"Product Total: Rs {sub_t}")
+            
+            # --- PROFIT KILLERS ---
+            c_a, c_b = st.columns(2)
+            del_charged = c_a.number_input("Delivery (Customer Pays)", value=200)
+            ship_cost = c_b.number_input("Actual Courier Cost (You Pay)", value=180, help="TCS/Leopard cost")
+            
+            pack_cost = st.number_input("Packaging Cost (Flyer/Box)", value=15)
+            
+            final_cod = sub_t + del_charged
+            st.markdown(f"### COD Amount: Rs {final_cod}")
+            
+            if st.form_submit_button("🚀 Confirm Order"):
+                if st.session_state.cart_adv and cust:
+                    create_order(cust, phone, addr, st.session_state.cart_adv, sub_t, del_charged, ship_cost, pack_cost, final_cod, src)
+                    st.session_state.cart_adv = []
+                    st.success("Order Created! Stock Deducted.")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("Cart empty or details missing.")
+
+# === EXPENSES ===
+elif menu == "💸 Expenses (Ads/Ops)":
+    st.subheader("Marketing & Overheads 💸")
+    
+    with st.form("exp_form"):
+        c1, c2 = st.columns(2)
+        desc = c1.text_input("Description (e.g. Facebook Ad Budget)")
+        amt = c2.number_input("Amount (Rs)", min_value=1)
+        cat = st.selectbox("Category", ["Marketing (Ads)", "Packaging Material (Bulk)", "Internet/Load", "Office Rent", "Other"])
+        
+        if st.form_submit_button("Log Expense"):
+            log_general_expense(desc, amt, cat)
+            st.success("Expense Logged.")
+            time.sleep(1)
+            st.rerun()
+            
+    # Show Recent Expenses
+    exps = get_data("expenses")
+    if exps:
+        st.write("### Recent Spending")
+        st.dataframe(pd.DataFrame(exps)[['date', 'category', 'desc', 'amount']], use_container_width=True)
+
+# === INVENTORY & STOCK ===
+elif menu == "📦 Inventory & Stock":
+    st.subheader("Hybrid Inventory Manager 🏪")
+    
+    tab1, tab2 = st.tabs(["Stock Adjustment (Offline)", "Product Catalog"])
+    
+    with tab1:
+        st.info("Agar 'Offline Sale' hui hai ya stock damage hua hai, yahan adjust karein.")
+        prods = get_products()
+        p_list = [p['name'] for p in prods]
+        
+        c1, c2, c3 = st.columns(3)
+        sel_prod = c1.selectbox("Select Product", p_list)
+        action = c2.radio("Action", ["Reduce Stock (Sale/Damage)", "Add Stock (Restock)"])
+        qty_adj = c3.number_input("Quantity", min_value=1, value=1)
+        
+        if st.button("Update Stock"):
+            target_p = next(p for p in prods if p['name'] == sel_prod)
+            final_qty = -qty_adj if "Reduce" in action else qty_adj
+            reason = "Offline Sale/Manual" if "Reduce" in action else "Restock"
+            
+            adjust_stock_manually(target_p['id'], final_qty, reason)
+            st.success(f"Stock Updated: {action} {qty_adj}")
+            time.sleep(1)
+            st.rerun()
+
+    with tab2:
+        with st.expander("➕ Add New Product"):
+            with st.form("new_p"):
+                name = st.text_input("Name")
+                sku = st.text_input("SKU")
+                pr = st.number_input("Sale Price", min_value=0)
+                co = st.number_input("Cost Price", min_value=0)
+                stk = st.number_input("Stock", min_value=1)
+                if st.form_submit_button("Save"):
+                    add_product(name, pr, co, stk, sku)
+                    st.success("Saved")
+                    st.rerun()
+        
+        if prods:
+            df = pd.DataFrame(prods)
+            st.dataframe(df[['name', 'stock', 'price', 'cost', 'sku']], use_container_width=True)
+
+# === ORDER MANAGER ===
+elif menu == "🚚 Order Manager":
+    st.subheader("Track Orders")
+    orders = get_data("orders")
+    if orders:
+        for o in orders:
+            with st.expander(f"{o['date']} | {o['customer']} | Profit: Rs {o.get('net_profit', 0)}"):
+                st.write(f"**Items:** {[i['name'] for i in o['items']]}")
+                st.write(f"Status: **{o['status']}**")
+                # Profit Breakdown
+                st.caption(f"Breakdown: Revenue {o['total']} - (Prod Cost + Shipping {o.get('actual_shipping_cost',0)} + Pack {o.get('packaging_cost',0)}) = Profit {o.get('net_profit',0)}")
