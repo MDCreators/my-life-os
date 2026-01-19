@@ -76,8 +76,8 @@ def log_sale(items, total, profit, customer):
     db.collection("sales").add({
         "date": str(datetime.now(tz)),
         "items": items,
-        "total": total,
-        "profit": profit,
+        "total": total,     # Ab ye simple int hoga
+        "profit": profit,   # Ye bhi simple int hoga
         "customer": customer,
         "timestamp": firestore.SERVER_TIMESTAMP
     })
@@ -126,7 +126,7 @@ if menu == "📊 Dashboard":
         orders_count = len(df_sales)
     else:
         total_rev, total_profit, orders_count = 0, 0, 0
-        df_sales = pd.DataFrame() # Empty DF to avoid errors
+        df_sales = pd.DataFrame()
         
     c1, c2, c3 = st.columns(3)
     c1.markdown(f"<div class='metric-card'><h5>Total Revenue</h5><div class='big-num'>PKR {total_rev:,}</div></div>", unsafe_allow_html=True)
@@ -135,13 +135,12 @@ if menu == "📊 Dashboard":
 
     st.write("### 📉 Sales Trend")
     if not df_sales.empty:
-        # Yahan wo error tha, maine fix kar diya hai
         fig = px.bar(df_sales, x='date', y='total', title="Daily Revenue", color_discrete_sequence=['#FFD700'])
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("No sales data available yet.")
 
-# === POS TERMINAL ===
+# === POS TERMINAL (FIXED) ===
 elif menu == "🛒 POS Terminal":
     st.title("New Sale (Billing) 🧾")
     
@@ -176,8 +175,9 @@ elif menu == "🛒 POS Terminal":
             cart_df = pd.DataFrame(st.session_state.cart)
             st.dataframe(cart_df[['name', 'qty', 'subtotal']], hide_index=True)
             
-            grand_total = cart_df['subtotal'].sum()
-            total_profit = cart_df['subprofit'].sum()
+            # --- CRITICAL FIX: Convert numpy int to Python int ---
+            grand_total = int(cart_df['subtotal'].sum())
+            total_profit = int(cart_df['subprofit'].sum())
             
             st.markdown(f"### Total: PKR {grand_total}")
             
