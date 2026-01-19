@@ -20,20 +20,20 @@ def check_password():
             st.session_state["password_correct"] = False
 
     if "password_correct" not in st.session_state:
-        st.markdown("<h1 style='text-align:center; color:#4CAF50;'>🇵🇰 Dukaan Pro Login</h1>", unsafe_allow_html=True)
-        st.text_input("Mobile / Email", key="username")
-        st.text_input("Pin Code", type="password", on_change=password_entered, key="password")
+        st.markdown("<h1 style='text-align:center; color:#3E64FF;'>📦 E-Com Manager</h1>", unsafe_allow_html=True)
+        st.text_input("Admin ID", key="username")
+        st.text_input("Password", type="password", on_change=password_entered, key="password")
         return False
     elif not st.session_state["password_correct"]:
-        st.text_input("Mobile / Email", key="username")
-        st.text_input("Pin Code", type="password", on_change=password_entered, key="password")
-        st.error("🔒 Galat Password")
+        st.text_input("Admin ID", key="username")
+        st.text_input("Password", type="password", on_change=password_entered, key="password")
+        st.error("🔒 Access Denied")
         return False
     else:
         return True
 
 # --- 1. CONFIG & AUTH ---
-st.set_page_config(page_title="Dukaan Pro", page_icon="🏪", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="E-Com Dashboard", page_icon="📦", layout="wide", initial_sidebar_state="expanded")
 
 if not check_password():
     st.stop()
@@ -53,295 +53,213 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
-# --- 3. DATABASE FUNCTIONS (UPDATED) ---
+# --- 3. DATABASE FUNCTIONS (ECOMMERCE LOGIC) ---
 def get_products():
     docs = db.collection("products").stream()
     return [{"id": d.id, **d.to_dict()} for d in docs]
 
-def add_product(name, price, cost, stock, category):
+def add_product(name, price, cost, stock, sku):
     db.collection("products").add({
         "name": name, "price": int(price), "cost": int(cost), 
-        "stock": int(stock), "category": category
+        "stock": int(stock), "sku": sku
     })
 
-def update_stock(product_id, qty_sold):
-    ref = db.collection("products").document(product_id)
-    curr = ref.get().to_dict()
-    if curr and 'stock' in curr:
-        new_stock = int(curr['stock']) - int(qty_sold)
-        ref.update({"stock": new_stock})
-
-def log_sale(items, subtotal, discount, final_total, profit, customer, payment_mode):
+def create_order(customer_name, phone, address, items, subtotal, delivery_fee, total, source, status="Pending"):
     tz = pytz.timezone('Asia/Karachi')
-    db.collection("sales").add({
+    # Calculate total cost for profit tracking
+    total_cost = sum([item['cost'] * item['qty'] for item in items])
+    estimated_profit = subtotal - total_cost
+    
+    db.collection("orders").add({
         "date": str(datetime.now(tz)),
+        "customer": customer_name,
+        "phone": phone,
+        "address": address,
         "items": items,
         "subtotal": int(subtotal),
-        "discount": int(discount),
-        "total": int(final_total),
-        "profit": int(profit),
-        "customer": customer,
-        "mode": payment_mode, # Cash or Udhaar
+        "delivery_fee": int(delivery_fee),
+        "total": int(total),
+        "total_cost": int(total_cost),
+        "profit": int(estimated_profit),
+        "source": source, # WhatsApp, Insta, Web
+        "status": status, # Pending, Shipped, Delivered, Returned, Cancelled
         "timestamp": firestore.SERVER_TIMESTAMP
     })
 
-def log_expense(desc, amount, category):
-    tz = pytz.timezone('Asia/Karachi')
-    db.collection("expenses").add({
-        "date": str(datetime.now(tz)),
-        "desc": desc,
-        "amount": int(amount),
-        "category": category,
-        "timestamp": firestore.SERVER_TIMESTAMP
-    })
+def update_order_status(order_id, new_status):
+    db.collection("orders").document(order_id).update({"status": new_status})
 
-def get_sales():
-    docs = db.collection("sales").order_by("timestamp", direction=firestore.Query.DESCENDING).limit(100).stream()
+def get_orders():
+    docs = db.collection("orders").order_by("timestamp", direction=firestore.Query.DESCENDING).limit(100).stream()
     return [{"id": d.id, **d.to_dict()} for d in docs]
 
-def get_expenses():
-    docs = db.collection("expenses").order_by("timestamp", direction=firestore.Query.DESCENDING).limit(50).stream()
-    return [{"id": d.id, **d.to_dict()} for d in docs]
-
-# --- 4. DESI UI STYLING ---
+# --- 4. MODERN UI STYLING ---
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;600&display=swap');
+    .stApp { background-color: #f4f6f9; font-family: 'Inter', sans-serif; color: #333; }
     
-    .stApp { background-color: #f0f2f6; font-family: 'Poppins', sans-serif; color: #333; }
-    
-    .metric-card {
-        background: white;
-        padding: 20px; border-radius: 15px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-        border-top: 5px solid #4CAF50;
-        margin-bottom: 20px; text-align: center;
+    .stat-card {
+        background: white; padding: 20px; border-radius: 12px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-left: 5px solid #3E64FF;
     }
-    .metric-title { font-size: 14px; color: #666; font-weight: 500; }
-    .metric-val { font-size: 28px; font-weight: 700; color: #2E7D32; }
+    .stat-val { font-size: 24px; font-weight: bold; color: #2c3e50; }
+    .stat-label { font-size: 14px; color: #7f8c8d; }
     
-    .sidebar-text { font-size: 18px; font-weight: bold; color: #1E88E5; }
+    /* Status Badges */
+    .status-Pending { color: #e67e22; font-weight: bold; }
+    .status-Shipped { color: #3498db; font-weight: bold; }
+    .status-Delivered { color: #27ae60; font-weight: bold; }
+    .status-Returned { color: #c0392b; font-weight: bold; }
     
-    .stButton>button { 
-        background: linear-gradient(90deg, #4CAF50 0%, #2E7D32 100%);
-        color: white; border: none; border-radius: 10px; height: 50px; font-weight: 600;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-    .stButton>button:hover { transform: scale(1.02); }
-    
-    /* Input Fields */
-    .stTextInput>div>div>input { border-radius: 10px; border: 1px solid #ddd; }
+    .stButton>button { border-radius: 8px; font-weight: 600; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 5. SIDEBAR NAVIGATION ---
+# --- 5. SIDEBAR ---
 with st.sidebar:
-    st.markdown("## 🏪 Dukaan Pro")
-    st.caption(f"Manager: {current_user.split('@')[0]}")
-    st.write("---")
-    menu = st.radio("Main Menu", 
-        ["📊 Karobaar (Dashboard)", 
-         "🛒 Sale Point (POS)", 
-         "📒 Udhaar Khata", 
-         "📦 Maal (Inventory)", 
-         "💸 Kharcha (Expenses)"])
-    
+    st.title("📦 Admin Ops")
+    menu = st.radio("Navigate", ["📊 Dashboard", "📝 New Order", "🚚 Order Manager", "📦 Inventory"])
     st.write("---")
     if st.button("Logout"):
         del st.session_state["password_correct"]
         st.rerun()
 
-# --- 6. APP MODULES ---
+# --- 6. MODULES ---
 
-# === DASHBOARD (KAROBAAR) ===
-if menu == "📊 Karobaar (Dashboard)":
-    st.subheader("Aaj ki Situation 📈")
+# === DASHBOARD ===
+if menu == "📊 Dashboard":
+    st.subheader("Business Pulse 📉")
+    orders = get_orders()
     
-    sales_data = get_sales()
-    expenses_data = get_expenses()
+    pending = 0
+    shipped = 0
+    revenue = 0
+    profit = 0
     
-    total_rev = 0
-    total_profit = 0
-    total_udhaar = 0
-    total_expense = 0
+    if orders:
+        df = pd.DataFrame(orders)
+        pending = len(df[df['status'] == 'Pending'])
+        shipped = len(df[df['status'] == 'Shipped'])
+        # Revenue only from Delivered orders usually, but let's track Total Value for now
+        delivered_df = df[df['status'] == 'Delivered']
+        if not delivered_df.empty:
+            revenue = delivered_df['total'].sum()
+            profit = delivered_df['profit'].sum()
     
-    if sales_data:
-        df_sales = pd.DataFrame(sales_data)
-        total_rev = df_sales['total'].sum()
-        total_profit = df_sales['profit'].sum()
-        # Calculate Udhaar
-        udhaar_df = df_sales[df_sales['mode'] == 'Udhaar']
-        if not udhaar_df.empty:
-            total_udhaar = udhaar_df['total'].sum()
-
-    if expenses_data:
-        df_exp = pd.DataFrame(expenses_data)
-        total_expense = df_exp['amount'].sum()
-        
-    net_profit = total_profit - total_expense
-
     c1, c2, c3, c4 = st.columns(4)
-    c1.markdown(f"<div class='metric-card'><div class='metric-title'>Total Galla (Sales)</div><div class='metric-val'>Rs {total_rev:,}</div></div>", unsafe_allow_html=True)
-    c2.markdown(f"<div class='metric-card' style='border-color:#F44336;'><div class='metric-title'>Market Udhaar</div><div class='metric-val' style='color:#F44336;'>Rs {total_udhaar:,}</div></div>", unsafe_allow_html=True)
-    c3.markdown(f"<div class='metric-card' style='border-color:#FFC107;'><div class='metric-title'>Dukaan Kharcha</div><div class='metric-val' style='color:#FFC107;'>Rs {total_expense:,}</div></div>", unsafe_allow_html=True)
-    c4.markdown(f"<div class='metric-card'><div class='metric-title'>Asal Munafa (Net)</div><div class='metric-val'>Rs {net_profit:,}</div></div>", unsafe_allow_html=True)
+    c1.markdown(f"<div class='stat-card'><div class='stat-label'>Orders Pending</div><div class='stat-val' style='color:#e67e22'>{pending}</div></div>", unsafe_allow_html=True)
+    c2.markdown(f"<div class='stat-card'><div class='stat-label'>To Be Delivered</div><div class='stat-val' style='color:#3498db'>{shipped}</div></div>", unsafe_allow_html=True)
+    c3.markdown(f"<div class='stat-card'><div class='stat-label'>Realized Revenue</div><div class='stat-val'>Rs {revenue:,}</div></div>", unsafe_allow_html=True)
+    c4.markdown(f"<div class='stat-card' style='border-color:#27ae60'><div class='stat-label'>Net Profit</div><div class='stat-val' style='color:#27ae60'>Rs {profit:,}</div></div>", unsafe_allow_html=True)
 
-    st.write("### 📅 Sales Trend")
-    if sales_data:
-        # Group by Date
-        df_sales['date_only'] = df_sales['date'].apply(lambda x: x.split(" ")[0])
-        daily_sales = df_sales.groupby('date_only')['total'].sum().reset_index()
-        fig = px.bar(daily_sales, x='date_only', y='total', color_discrete_sequence=['#4CAF50'])
-        st.plotly_chart(fig, use_container_width=True)
+    if orders:
+        st.write("### 📦 Recent Order Flow")
+        st.dataframe(pd.DataFrame(orders)[['date', 'customer', 'total', 'status', 'source']], use_container_width=True)
 
-# === POS (SALE POINT) ===
-elif menu == "🛒 Sale Point (POS)":
-    st.subheader("Nayi Sale Lagayen 🧾")
-    
-    if 'cart' not in st.session_state: st.session_state.cart = []
+# === NEW ORDER ENTRY ===
+elif menu == "📝 New Order":
+    st.subheader("Manual Order Entry (WhatsApp/Insta)")
     
     products = get_products()
     p_names = [p['name'] for p in products if p['stock'] > 0]
     
-    c1, c2 = st.columns([1.5, 1])
+    col1, col2 = st.columns([1, 1])
     
-    with c1:
+    with col1:
         with st.container(border=True):
-            st.markdown("##### 🛍️ Add Item")
-            sel_p_name = st.selectbox("Product", ["Select..."] + p_names)
+            st.markdown("##### 🛒 Cart Details")
+            if 'ecom_cart' not in st.session_state: st.session_state.ecom_cart = []
             
-            if sel_p_name != "Select...":
+            sel_p_name = st.selectbox("Select Product", ["Choose..."] + p_names)
+            if sel_p_name != "Choose...":
                 sel_p = next(p for p in products if p['name'] == sel_p_name)
-                st.caption(f"Price: {sel_p['price']} | Stock: {sel_p['stock']}")
-                qty = st.number_input("Tadaad (Qty)", min_value=1, max_value=int(sel_p['stock']), value=1)
-                
-                if st.button("Cart main daalen ➕"):
-                    st.session_state.cart.append({
-                        "id": sel_p['id'], "name": sel_p['name'], 
-                        "price": int(sel_p['price']), "cost": int(sel_p['cost']), "qty": int(qty),
-                        "subtotal": int(sel_p['price']) * int(qty),
-                        "profit_item": (int(sel_p['price']) - int(sel_p['cost'])) * int(qty)
+                qty = st.number_input("Quantity", 1, 100, 1)
+                if st.button("Add Item"):
+                    st.session_state.ecom_cart.append({
+                        "id": sel_p['id'], "name": sel_p['name'],
+                        "price": sel_p['price'], "cost": sel_p['cost'], "qty": qty,
+                        "subtotal": sel_p['price'] * qty
                     })
-                    st.success(f"{qty} {sel_p['name']} added!")
-
-    with c2:
-        with st.container(border=True):
-            st.markdown("##### 🧾 Bill Detail")
-            if st.session_state.cart:
-                cart_df = pd.DataFrame(st.session_state.cart)
+            
+            # Show Cart
+            if st.session_state.ecom_cart:
+                cart_df = pd.DataFrame(st.session_state.ecom_cart)
                 st.dataframe(cart_df[['name', 'qty', 'subtotal']], hide_index=True)
-                
-                # Calculation
-                sub_total = int(cart_df['subtotal'].sum())
-                profit_gross = int(cart_df['profit_item'].sum())
-                
-                discount = st.number_input("Discount (Kam kiye)", min_value=0, max_value=sub_total)
-                final_total = sub_total - discount
-                final_profit = profit_gross - discount # Profit kam hoga discount se
-                
-                st.markdown(f"### Total: Rs {final_total}")
-                
-                # Payment Mode
-                pay_mode = st.radio("Payment Type", ["Cash 💵", "Udhaar 📕"], horizontal=True)
-                cust_name = st.text_input("Customer Name (Zaroori for Udhaar)")
-                
-                if st.button("✅ Sale Complete Karein"):
-                    if pay_mode == "Udhaar 📕" and not cust_name:
-                        st.error("Udhaar ke liye naam likhna zaroori hay!")
-                    else:
-                        # 1. Stock Update
-                        for item in st.session_state.cart:
-                            update_stock(item['id'], item['qty'])
-                        
-                        # 2. Sale Log
-                        log_sale(st.session_state.cart, sub_total, discount, final_total, final_profit, cust_name, "Udhaar" if "Udhaar" in pay_mode else "Cash")
-                        
-                        # 3. WhatsApp Link Logic
-                        msg_text = f"Salam {cust_name}! Apka bill Rs {final_total} hay. Shukriya!"
-                        wa_link = f"https://wa.me/?text={msg_text}"
-                        
-                        st.session_state.cart = []
-                        st.balloons()
-                        st.success("Sale Ho Gayi!")
-                        st.markdown(f"[📲 Send Bill on WhatsApp]({wa_link})")
-                        time.sleep(2)
-                        st.rerun()
-                
-                if st.button("❌ Cancel"):
-                    st.session_state.cart = []
-                    st.rerun()
-            else:
-                st.info("Cart khali hay.")
+                if st.button("Clear Cart"): st.session_state.ecom_cart = []
 
-# === UDHAAR KHATA ===
-elif menu == "📒 Udhaar Khata":
-    st.subheader("Udhaar Ki List 📕")
+    with col2:
+        with st.container(border=True):
+            st.markdown("##### 👤 Customer & Delivery")
+            cust_name = st.text_input("Customer Name")
+            phone = st.text_input("Phone Number")
+            address = st.text_area("Shipping Address")
+            source = st.selectbox("Order Source", ["WhatsApp", "Instagram", "Website", "Call"])
+            
+            # Financials
+            subtotal = sum([item['subtotal'] for item in st.session_state.ecom_cart])
+            delivery = st.number_input("Delivery Charges", value=200)
+            final_total = subtotal + delivery
+            
+            st.markdown(f"### Total COD: Rs {final_total}")
+            
+            if st.button("🚀 Place Order", type="primary"):
+                if not st.session_state.ecom_cart or not cust_name:
+                    st.error("Cart is empty or Customer Name missing!")
+                else:
+                    create_order(cust_name, phone, address, st.session_state.ecom_cart, subtotal, delivery, final_total, source)
+                    st.session_state.ecom_cart = []
+                    st.success("Order Created Successfully! Check Order Manager.")
+                    time.sleep(1)
+                    st.rerun()
+
+# === ORDER MANAGER ===
+elif menu == "🚚 Order Manager":
+    st.subheader("Manage Shipments")
     
-    sales = get_sales()
-    if sales:
-        df = pd.DataFrame(sales)
-        udhaar_only = df[df['mode'] == 'Udhaar']
+    orders = get_orders()
+    if orders:
+        # Filter options
+        status_filter = st.selectbox("Filter by Status", ["All", "Pending", "Shipped", "Delivered", "Returned"])
         
-        if not udhaar_only.empty:
-            # Group by Customer to see total pending
-            summary = udhaar_only.groupby('customer')['total'].sum().reset_index()
-            summary.columns = ['Customer Name', 'Pending Amount']
-            
-            st.dataframe(summary, use_container_width=True)
-            
-            st.write("### Recent Udhaar Transactions")
-            st.dataframe(udhaar_only[['date', 'customer', 'total', 'items']], hide_index=True)
-        else:
-            st.success("Koi Udhaar baqi nahi! Zabardast.")
+        for o in orders:
+            if status_filter == "All" or o['status'] == status_filter:
+                with st.expander(f"{o['date']} | {o['customer']} | Rs {o['total']} ({o['status']})"):
+                    c1, c2 = st.columns([3, 1])
+                    with c1:
+                        st.write(f"**Items:** {[i['name'] + ' x' + str(i['qty']) for i in o['items']]}")
+                        st.write(f"**Address:** {o.get('address', 'N/A')}")
+                        st.write(f"**Phone:** {o.get('phone', 'N/A')}")
+                        st.caption(f"Source: {o.get('source', 'Unknown')}")
+                    with c2:
+                        current_status = o['status']
+                        new_status = st.selectbox("Update Status", 
+                                                  ["Pending", "Shipped", "Delivered", "Returned", "Cancelled"], 
+                                                  key=f"st_{o['id']}", index=["Pending", "Shipped", "Delivered", "Returned", "Cancelled"].index(current_status))
+                        
+                        if new_status != current_status:
+                            update_order_status(o['id'], new_status)
+                            st.toast(f"Status updated to {new_status}")
+                            time.sleep(1)
+                            st.rerun()
     else:
-        st.info("No data.")
+        st.info("No active orders.")
 
 # === INVENTORY ===
-elif menu == "📦 Maal (Inventory)":
-    st.subheader("Dukaan Ka Maal 📦")
-    
-    with st.expander("Naya Maal Add Karein (New Stock)"):
-        with st.form("add_stock"):
+elif menu == "📦 Inventory":
+    st.subheader("Product Catalog")
+    with st.expander("Add New Product"):
+        with st.form("new_prod"):
             c1, c2 = st.columns(2)
-            name = c1.text_input("Cheez ka Naam")
-            cat = c2.selectbox("Category", ["Rashan", "Electronics", "General", "Mobile"])
-            price = c1.number_input("Bechni Kitne ki? (Sale Price)", min_value=0)
-            cost = c2.number_input("Aayi Kitne ki? (Cost Price)", min_value=0)
-            stock = st.number_input("Tadaad (Qty)", min_value=1)
-            
-            if st.form_submit_button("Save Stock"):
-                add_product(name, price, cost, stock, cat)
-                st.success(f"{name} added!")
-                time.sleep(1)
+            name = c1.text_input("Product Name")
+            sku = c2.text_input("SKU Code (Optional)")
+            price = c1.number_input("Selling Price", min_value=0)
+            cost = c2.number_input("Cost Price", min_value=0)
+            stock = st.number_input("Stock Qty", min_value=1)
+            if st.form_submit_button("Add to Catalog"):
+                add_product(name, price, cost, stock, sku)
+                st.success("Product Added")
                 st.rerun()
     
-    products = get_products()
-    if products:
-        df = pd.DataFrame(products)
-        # Low Stock Warning
-        low_stock = df[df['stock'] < 5]
-        if not low_stock.empty:
-            st.error(f"⚠️ Warning: {len(low_stock)} items khatam honay walay hain!")
-        
-        st.dataframe(df, use_container_width=True)
-
-# === EXPENSES ===
-elif menu == "💸 Kharcha (Expenses)":
-    st.subheader("Roznamcha (Daily Expenses) 💸")
-    
-    with st.form("add_exp"):
-        c1, c2 = st.columns(2)
-        desc = c1.text_input("Kahan kharch hua? (e.g. Chai, Bill)")
-        amt = c2.number_input("Amount", min_value=1)
-        cat = st.selectbox("Type", ["Food/Chai", "Shop Rent", "Electricity", "Load/Net", "Other"])
-        
-        if st.form_submit_button("Add Kharcha"):
-            log_expense(desc, amt, cat)
-            st.success("Expense Added")
-            time.sleep(1)
-            st.rerun()
-            
-    st.write("### Recent Expenses")
-    exps = get_expenses()
-    if exps:
-        st.dataframe(pd.DataFrame(exps)[['date', 'desc', 'amount', 'category']], use_container_width=True)
+    prods = get_products()
+    if prods: st.dataframe(pd.DataFrame(prods))
