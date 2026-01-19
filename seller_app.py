@@ -57,11 +57,12 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. LOGIN SYSTEM ---
+# --- 4. LOGIN SYSTEM (FIXED NAME DISPLAY) ---
 def login_system():
     if "user_session" not in st.session_state:
         st.session_state["user_session"] = None
         st.session_state["is_admin"] = False
+        st.session_state["business_name"] = "My Shop" # Default
 
     if st.session_state["user_session"]: return True
 
@@ -81,13 +82,18 @@ def login_system():
             
             try:
                 doc = db.collection("users").document(email).get()
-                if doc.exists and doc.to_dict().get("password") == password:
-                    st.session_state["user_session"] = email
-                    st.session_state["is_admin"] = False
-                    st.success("Welcome!")
-                    time.sleep(0.5)
-                    st.rerun()
-                else: st.error("Invalid Credentials")
+                if doc.exists:
+                    data = doc.to_dict()
+                    if data.get("password") == password:
+                        st.session_state["user_session"] = email
+                        # FETCH BUSINESS NAME HERE
+                        st.session_state["business_name"] = data.get("business_name", email.split('@')[0])
+                        st.session_state["is_admin"] = False
+                        st.success(f"Welcome {st.session_state['business_name']}!")
+                        time.sleep(0.5)
+                        st.rerun()
+                    else: st.error("Invalid Credentials")
+                else: st.error("User not found")
             except: st.error("Login Error")
         st.markdown("</div>", unsafe_allow_html=True)
     return False
@@ -96,6 +102,7 @@ if not login_system(): st.stop()
 
 current_owner = st.session_state["user_session"]
 is_super_admin = st.session_state["is_admin"]
+current_biz_name = st.session_state.get("business_name", "My Shop")
 
 # --- 5. FUNCTIONS ---
 def get_products(owner_id):
@@ -155,11 +162,14 @@ if is_super_admin:
         if st.form_submit_button("Create"):
             db.collection("users").document(c_email).set({"password": c_pass, "business_name": c_name})
             st.success("Created!")
+            st.info(f"User: {c_email} | Biz: {c_name}")
     st.stop()
 
 # --- 7. MERCHANT UI ---
 with st.sidebar:
-    st.markdown(f"## 🛍️ {current_owner.split('@')[0].capitalize()}")
+    # UPDATED: Shows Business Name now
+    st.markdown(f"## 🛍️ {current_biz_name}") 
+    st.caption(f"ID: {current_owner}")
     menu = st.radio("Navigate", ["📊 Overview", "📝 New Order", "🚚 Orders", "📦 Inventory", "💸 Expenses"])
     st.write("---")
     if st.button("Logout"):
@@ -207,11 +217,16 @@ elif menu == "📝 New Order":
             cust = st.text_input("Name")
             phone = st.text_input("Phone")
             addr = st.text_area("Address")
-            src = st.selectbox("Source", ["Web", "WhatsApp", "Insta"])
+            
+            # UPDATED: More Sources
+            source_list = ["WhatsApp", "Instagram", "Facebook", "TikTok", "Website", "Daraz", "Walk-in (Shop)", "Call", "Referral", "Other"]
+            src = st.selectbox("Source", source_list)
+            
             subt = sum([i['price']*i['qty'] for i in st.session_state.cart])
-            dlv = st.number_input("Delivery", value=200)
-            ship = st.number_input("Courier Cost", value=180)
-            pack = st.number_input("Packing", value=15)
+            dlv = st.number_input("Delivery Charge (from Cust)", value=200)
+            ship = st.number_input("Actual Courier Cost", value=180)
+            pack = st.number_input("Packing Cost", value=15)
+            
             if st.form_submit_button("Place Order"):
                 if st.session_state.cart and cust:
                     create_order(cust, phone, addr, st.session_state.cart, subt, dlv, ship, pack, subt+dlv, src, current_owner)
@@ -231,17 +246,17 @@ elif menu == "🚚 Orders":
             with c1:
                 st.write(f"**Items:** {[i['name'] for i in o['items']]}")
                 st.write(f"**Address:** {o.get('address')}")
-                # Status Update
+                st.write(f"**Source:** {o.get('source', 'Unknown')}")
+                
                 new_stat = st.selectbox("Status", ["Pending", "Shipped", "Delivered", "Returned", "Cancelled"], key=f"s_{o['id']}", index=["Pending", "Shipped", "Delivered", "Returned", "Cancelled"].index(o.get('status', 'Pending')))
                 if new_stat != o.get('status'):
                     db.collection("orders").document(o['id']).update({"status": new_stat})
                     st.rerun()
             
             with c2:
-                # INVOICE GENERATOR
+                # INVOICE
                 if st.button("🧾 View Invoice", key=f"inv_{o['id']}"):
                     st.markdown("---")
-                    # HTML Invoice Template
                     inv_html = f"""
                     <div class="invoice-box">
                         <div class="invoice-header">
@@ -249,27 +264,25 @@ elif menu == "🚚 Orders":
                             <div>
                                 <b>Order ID:</b> {o['id'][:8]}<br>
                                 <b>Date:</b> {o['date'].split('.')[0]}<br>
-                                <b>Merchant:</b> {current_owner}
+                                <b>Merchant:</b> {current_biz_name}
                             </div>
                         </div>
                         <p><b>Bill To:</b><br>{o['customer']}<br>{o.get('phone','')}<br>{o.get('address','')}</p>
                         <hr>
                         {''.join([f"<div class='invoice-item'><span>{i['name']} (x{i['qty']})</span><span>Rs {i['price']*i['qty']}</span></div>" for i in o['items']])}
-                        <div class='invoice-item'><span>Delivery</span><span>Rs {o['delivery']}</span></div>
+                        <div class='invoice-item'><span>Delivery</span><span>Rs {o.get('delivery',0)}</span></div>
                         <div class='invoice-total'>TOTAL: Rs {o['total']}</div>
                     </div>
                     """
                     st.markdown(inv_html, unsafe_allow_html=True)
-                    st.info("Tip: Iska screenshot le kar customer ko bhej dein.")
 
-# === INVENTORY (MANUAL MANAGE) ===
+# === INVENTORY ===
 elif menu == "📦 Inventory":
     st.title("Inventory")
     tab1, tab2 = st.tabs(["Stock Adjustment", "Add Product"])
     
-    # 1. Manual Stock Adjustment
     with tab1:
-        st.subheader("Update Stock (Manual)")
+        st.subheader("Update Stock")
         products = get_products(current_owner)
         if products:
             p_names = [p['name'] for p in products]
@@ -278,21 +291,18 @@ elif menu == "📦 Inventory":
             if sel_p_name:
                 p_obj = next(p for p in products if p['name'] == sel_p_name)
                 st.write(f"Current Stock: **{p_obj['stock']}**")
-                
                 c1, c2 = st.columns(2)
                 action = c1.radio("Action", ["Add (+)", "Remove (-)"])
                 qty_change = c2.number_input("Quantity", min_value=1, value=1)
                 
-                if st.button("Update Stock"):
+                if st.button("Update"):
                     new_stock = p_obj['stock'] + qty_change if action == "Add (+)" else p_obj['stock'] - qty_change
                     update_stock(p_obj['id'], new_stock)
-                    st.success(f"Stock updated to {new_stock}")
+                    st.success(f"Updated! New Stock: {new_stock}")
                     time.sleep(1)
                     st.rerun()
-        else:
-            st.info("No products found.")
+        else: st.info("No products.")
 
-    # 2. Add New Product
     with tab2:
         with st.form("new_prod"):
             c1, c2 = st.columns(2)
@@ -301,11 +311,10 @@ elif menu == "📦 Inventory":
             price = c1.number_input("Sale Price", min_value=1)
             cost = c2.number_input("Cost Price", min_value=1)
             stock = st.number_input("Initial Stock", min_value=1)
-            if st.form_submit_button("Save Product"):
+            if st.form_submit_button("Save"):
                 add_product(name, price, cost, stock, sku, current_owner)
                 st.success("Added!")
                 st.rerun()
-    
     st.dataframe(pd.DataFrame(get_products(current_owner)))
 
 # === EXPENSES ===
