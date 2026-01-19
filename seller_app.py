@@ -101,7 +101,7 @@ def login_system():
         
         if st.button("✨ Login", use_container_width=True):
             # 1. Super Admin Check
-            if email == "admin@owner.com" and password == "boss123":
+            if email == "apexsports480@gmail.com" and password == "13032a7c":
                 st.session_state["user_session"] = "SUPER_ADMIN"
                 st.session_state["is_admin"] = True
                 st.rerun() # <-- YEH HAI MAGIC (Refresh Immediately)
