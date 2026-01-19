@@ -23,104 +23,97 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
-# --- 3. DARK MODE UI (PREMIUM SAAS LOOK) ---
+# --- 3. DARK MODE UI ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
-    
-    /* GLOBAL DARK THEME */
     .stApp { background-color: #0F172A; font-family: 'Inter', sans-serif; color: #F8FAFC; }
-    
-    /* HEADERS */
     h1, h2, h3, h4, h5, h6 { color: #F8FAFC !important; font-weight: 700; }
     p, label, .stMarkdown { color: #CBD5E1 !important; }
-    
-    /* SIDEBAR */
     section[data-testid="stSidebar"] { background-color: #1E293B; border-right: 1px solid #334155; }
-    section[data-testid="stSidebar"] .stMarkdown { color: #94A3B8 !important; }
-    
-    /* CARDS */
     .kpi-card {
-        background: #1E293B; 
-        padding: 20px; 
-        border-radius: 12px;
-        border: 1px solid #334155;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+        background: #1E293B; padding: 20px; border-radius: 12px;
+        border: 1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
     }
     .kpi-title { font-size: 13px; font-weight: 600; color: #94A3B8; letter-spacing: 1px; text-transform: uppercase; }
     .kpi-value { font-size: 28px; font-weight: 800; color: #F8FAFC; margin-top: 5px; }
-    
-    /* INPUT FIELDS (Fixing invisible text) */
     .stTextInput input, .stNumberInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] {
-        background-color: #334155 !important;
-        color: white !important;
-        border: 1px solid #475569 !important;
-        border-radius: 8px;
+        background-color: #334155 !important; color: white !important; border: 1px solid #475569 !important; border-radius: 8px;
     }
-    
-    /* BUTTONS */
     .stButton>button {
         background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
         color: white; border: none; border-radius: 8px; font-weight: 600;
-        transition: all 0.2s;
     }
-    .stButton>button:hover { transform: scale(1.02); box-shadow: 0 0 15px rgba(99, 102, 241, 0.5); }
-    
-    /* TABLES */
-    .stDataFrame { border: 1px solid #334155; border-radius: 8px; }
-    
-    /* INVOICE BOX (Light Mode inside Dark Mode for printing) */
-    .invoice-box {
-        background: white; color: black; padding: 30px; border-radius: 5px;
-    }
+    .invoice-box { background: white; color: black; padding: 30px; border-radius: 5px; }
     .invoice-box div, .invoice-box p, .invoice-box span { color: #333 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. LOGIN SYSTEM (FIXED: 1 CLICK LOGIN) ---
+# --- 4. LOGIN SYSTEM (PERSISTENT & AUTO) ---
 def login_system():
-    # Session Init
+    # 1. Check URL for existing session (Auto Login)
+    if "user_session" not in st.session_state:
+        # URL se check karo (query params)
+        qp = st.query_params
+        if "session" in qp:
+            user_email = qp["session"]
+            # Verify if user actually exists (Quick check)
+            if user_email == "admin@owner.com":
+                st.session_state["user_session"] = "SUPER_ADMIN"
+                st.session_state["is_admin"] = True
+                st.session_state["business_name"] = "Super Admin"
+            else:
+                # Normal user verification
+                try:
+                    doc = db.collection("users").document(user_email).get()
+                    if doc.exists:
+                        st.session_state["user_session"] = user_email
+                        st.session_state["business_name"] = doc.to_dict().get("business_name", "Shop")
+                        st.session_state["is_admin"] = False
+                except:
+                    pass # Fail silently and show login screen
+
+    # 2. Init Session State defaults
     if "user_session" not in st.session_state:
         st.session_state["user_session"] = None
         st.session_state["is_admin"] = False
         st.session_state["business_name"] = "My Shop"
 
-    # Already Logged In?
+    # 3. If Logged In, Return True
     if st.session_state["user_session"]: 
         return True
 
-    # Login UI
+    # 4. Show Login Screen
     c1, c2, c3 = st.columns([1, 1.5, 1])
     with c2:
-        st.markdown("<br><br><div style='text-align:center; padding: 40px; background: #1E293B; border-radius: 20px; border: 1px solid #334155; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);'>", unsafe_allow_html=True)
-        st.markdown("<h1 style='color:#6366F1; margin-bottom:10px;'>🚀 E-Com Pro</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size:14px;'>Secure Merchant Portal</p>", unsafe_allow_html=True)
+        st.markdown("<br><br><div style='text-align:center; padding: 40px; background: #1E293B; border-radius: 20px; border: 1px solid #334155;'>", unsafe_allow_html=True)
+        st.markdown("<h1 style='color:#6366F1;'>🚀 E-Com Pro</h1>", unsafe_allow_html=True)
+        st.markdown("<p>Secure Merchant Portal</p>", unsafe_allow_html=True)
         
-        email = st.text_input("Email Address", placeholder="admin@shop.com")
-        password = st.text_input("Password", type="password", placeholder="••••••")
+        email = st.text_input("Email", placeholder="admin@shop.com")
+        password = st.text_input("Password", type="password")
         
         if st.button("✨ Login", use_container_width=True):
-            # 1. Super Admin Check
-            if email == "apexsports480@gmail.com" and password == "13032a7c":
+            # A. Super Admin
+            if email == "admin@owner.com" and password == "boss123":
                 st.session_state["user_session"] = "SUPER_ADMIN"
                 st.session_state["is_admin"] = True
-                st.rerun() # <-- YEH HAI MAGIC (Refresh Immediately)
+                st.query_params["session"] = "admin@owner.com" # Save to URL
+                st.rerun()
             
-            # 2. Client Check
+            # B. Clients
             try:
                 doc = db.collection("users").document(email).get()
-                if doc.exists:
-                    data = doc.to_dict()
-                    if data.get("password") == password:
-                        st.session_state["user_session"] = email
-                        st.session_state["business_name"] = data.get("business_name", email.split('@')[0])
-                        st.session_state["is_admin"] = False
-                        st.success("Login Successful!")
-                        time.sleep(0.1)
-                        st.rerun() # <-- YEH HAI MAGIC (Refresh Immediately)
-                    else: st.error("❌ Wrong Password")
-                else: st.error("❌ User Not Found")
-            except Exception as e: st.error(f"Error: {e}")
+                if doc.exists and doc.to_dict().get("password") == password:
+                    st.session_state["user_session"] = email
+                    st.session_state["business_name"] = doc.to_dict().get("business_name")
+                    st.session_state["is_admin"] = False
+                    st.query_params["session"] = email # Save to URL
+                    st.success("Success!")
+                    time.sleep(0.1)
+                    st.rerun()
+                else: st.error("Invalid Credentials")
+            except: st.error("Error connecting to DB")
         st.markdown("</div>", unsafe_allow_html=True)
     return False
 
@@ -131,7 +124,7 @@ current_owner = st.session_state["user_session"]
 is_super_admin = st.session_state["is_admin"]
 current_biz_name = st.session_state.get("business_name", "My Shop")
 
-# --- 5. DATA FUNCTIONS ---
+# --- 5. FUNCTIONS ---
 def get_products(owner_id):
     docs = db.collection("products").where("owner", "==", owner_id).stream()
     return [{"id": d.id, **d.to_dict()} for d in docs]
@@ -175,31 +168,42 @@ def get_expenses(owner_id):
     data.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
     return data
 
-# --- 6. SUPER ADMIN UI ---
+# --- 6. SUPER ADMIN UI (WITH DELETE OPTION) ---
 if is_super_admin:
     st.sidebar.markdown("### 👑 Super Admin")
     if st.sidebar.button("Logout"):
+        st.query_params.clear() # Clear URL
         st.session_state["user_session"] = None
         st.rerun()
     
-    st.title("Admin Control")
-    with st.form("new_client"):
-        st.subheader("Add New Client")
-        c_email = st.text_input("Client Email")
-        c_pass = st.text_input("Password")
-        c_name = st.text_input("Business Name")
-        if st.form_submit_button("Create Account"):
-            db.collection("users").document(c_email).set({
-                "password": c_pass, "business_name": c_name, "created_at": firestore.SERVER_TIMESTAMP
-            })
-            st.success(f"Client {c_name} Created!")
+    st.title("Admin HQ")
+    t1, t2 = st.tabs(["Create Client", "Manage Clients"])
     
-    st.write("---")
-    st.write("### Active Clients")
-    users = db.collection("users").stream()
-    for u in users:
-        d = u.to_dict()
-        st.code(f"{d.get('business_name')} | {u.id}")
+    with t1:
+        with st.form("new_client"):
+            st.subheader("Add New Client")
+            c_email = st.text_input("Email")
+            c_pass = st.text_input("Password")
+            c_name = st.text_input("Business Name")
+            if st.form_submit_button("Create Account"):
+                db.collection("users").document(c_email).set({
+                    "password": c_pass, "business_name": c_name, "created_at": firestore.SERVER_TIMESTAMP
+                })
+                st.success(f"Client {c_name} Created!")
+
+    with t2:
+        st.subheader("Active Clients")
+        users = db.collection("users").stream()
+        for u in users:
+            d = u.to_dict()
+            with st.expander(f"🏢 {d.get('business_name')} ({u.id})"):
+                c1, c2 = st.columns([4, 1])
+                c1.write(f"**Password:** {d.get('password')}")
+                if c2.button("🗑️ Delete", key=f"del_{u.id}"):
+                    db.collection("users").document(u.id).delete()
+                    st.warning(f"Deleted {u.id}")
+                    time.sleep(1)
+                    st.rerun()
     st.stop()
 
 # --- 7. MERCHANT UI ---
@@ -210,6 +214,7 @@ with st.sidebar:
     menu = st.radio("Menu", ["📊 Overview", "📝 New Order", "🚚 Orders", "📦 Inventory", "💸 Expenses"])
     st.write("---")
     if st.button("Logout"):
+        st.query_params.clear() # Clear URL
         st.session_state["user_session"] = None
         st.rerun()
 
@@ -240,7 +245,6 @@ elif menu == "📝 New Order":
     if 'cart' not in st.session_state: st.session_state.cart = []
     
     with c1:
-        st.markdown("### Select Products")
         sel = st.selectbox("Product", ["Select..."] + p_names)
         if sel != "Select...":
             p_obj = next(p for p in products if p['name'] == sel)
@@ -252,7 +256,6 @@ elif menu == "📝 New Order":
             if st.button("Clear Cart"): st.session_state.cart = []
 
     with c2:
-        st.markdown("### Customer Details")
         with st.form("checkout"):
             cust = st.text_input("Name")
             phone = st.text_input("Phone")
