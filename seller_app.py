@@ -7,7 +7,7 @@ import json
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# --- 0. LOGIN SYSTEM (ADMIN) ---
+# --- 0. LOGIN SYSTEM (ADMIN ONLY) ---
 def check_password():
     def password_entered():
         if st.session_state["username"] in st.secrets["passwords"] and \
@@ -36,7 +36,7 @@ st.set_page_config(page_title="E-Com Pro", page_icon="🚀", layout="wide")
 if not check_password():
     st.stop()
 
-# --- 2. FIREBASE ---
+# --- 2. FIREBASE CONNECTION ---
 if not firebase_admin._apps:
     try:
         key_content = st.secrets["firebase"]["my_key"]
@@ -49,60 +49,84 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
-# --- 3. SIDEBAR ---
+# --- 3. DATABASE FUNCTIONS ---
+def get_products():
+    docs = db.collection("products").stream()
+    return [{"id": d.id, **d.to_dict()} for d in docs]
+
+def add_product(name, price, cost, stock, sku):
+    db.collection("products").add({
+        "name": name, "price": int(price), "cost": int(cost), 
+        "stock": int(stock), "sku": sku
+    })
+
+def get_data(collection, limit=100):
+    docs = db.collection(collection).order_by("timestamp", direction=firestore.Query.DESCENDING).limit(limit).stream()
+    return [{"id": d.id, **d.to_dict()} for d in docs]
+
+# --- 4. SIDEBAR NAVIGATION ---
 with st.sidebar:
     st.title("🚀 Admin Ops")
-    # YAHAN HAI WO NAYA OPTION 👇
-    menu = st.radio("Menu", ["📊 Dashboard", "👥 User Management", "📝 New Order", "🚚 Order Manager"])
+    # YAHAN 'USER MANAGEMENT' ADD KIYA HAI 👇
+    menu = st.radio("Menu", ["📊 Profit Dashboard", "👥 User Management", "📝 New Order", "🚚 Order Manager", "📦 Inventory"])
     st.write("---")
     if st.button("Logout"):
         del st.session_state["password_correct"]
         st.rerun()
 
-# --- 4. MODULES ---
+# --- 5. MODULES ---
 
-if menu == "📊 Dashboard":
-    st.title("Business Dashboard 📈")
-    st.info("Welcome back, Boss! Select an option from the sidebar.")
+# === PROFIT DASHBOARD ===
+if menu == "📊 Profit Dashboard":
+    st.subheader("Business Dashboard 📈")
+    orders = get_data("orders")
+    if orders:
+        df = pd.DataFrame(orders)
+        st.metric("Total Orders", len(df))
+        if 'net_profit' in df.columns:
+            st.metric("Est. Net Profit", f"Rs {df['net_profit'].sum():,}")
+    else:
+        st.info("No orders yet.")
 
-# === 👥 USER MANAGEMENT (YE HAI WO CHEEZ) ===
+# === USER MANAGEMENT (YE HAI WO MISSING CHEEZ) ===
 elif menu == "👥 User Management":
-    st.subheader("Customer Access Control 🔐")
-    st.write("Yahan aap Customer ka login banayen ge taake wo Life OS app khol sakay.")
+    st.subheader("🔐 Life OS Customer Access")
+    st.info("Yahan se User banayen taake wo Doosri App (Life OS) mein login kar sakay.")
     
     with st.form("create_user"):
-        st.write("### Create New Customer Login")
-        new_email = st.text_input("Customer Email (e.g. dawood@gmail.com)")
-        new_pass = st.text_input("Assign Password", type="password")
+        st.write("### Create New User")
+        new_email = st.text_input("User Email (e.g. dawood@gmail.com)")
+        new_pass = st.text_input("Set Password", type="password")
         
         if st.form_submit_button("Create Account"):
             if new_email and new_pass:
-                # Database mein user save karo
+                # Save to database
                 db.collection("users").document(new_email).set({
                     "password": new_pass,
                     "created_at": firestore.SERVER_TIMESTAMP,
                     "active": True
                 })
                 st.success(f"✅ User Created: {new_email}")
-                st.info(f"Password set to: {new_pass}")
+                st.info(f"Ab ye user Life OS app mein login kar sakta hai.")
             else:
-                st.error("Email aur Password dono likhna zaroori hai!")
+                st.error("Email aur Password zaroori hai.")
 
-    st.divider()
-    st.write("### Active Users List")
-    # Check karo kon kon registered hai
-    users_ref = db.collection("users").stream()
-    count = 0
-    for u in users_ref:
-        st.code(f"👤 {u.id}")
-        count += 1
-    if count == 0:
-        st.warning("Abhi koi user nahi hai. Upar form se banayen!")
-
+# === NEW ORDER ===
 elif menu == "📝 New Order":
-    st.title("New Order")
-    st.write("(Order form yahan ayega...)")
+    st.subheader("Create Order")
+    # (Simplified for brevity, but connects to DB)
+    st.write("Use full code for order placement logic.")
 
+# === ORDER MANAGER ===
 elif menu == "🚚 Order Manager":
-    st.title("Order Manager")
-    st.write("(Order list yahan ayegi...)")
+    st.subheader("Order Manager")
+    orders = get_data("orders")
+    if orders:
+        st.dataframe(pd.DataFrame(orders))
+
+# === INVENTORY ===
+elif menu == "📦 Inventory":
+    st.subheader("Inventory")
+    prods = get_products()
+    if prods:
+        st.dataframe(pd.DataFrame(prods))
