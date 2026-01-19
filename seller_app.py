@@ -2,352 +2,236 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
+from datetime import datetime
+import pytz 
+import streamlit.components.v1 as components 
+import time
 import random
+import json
+import firebase_admin
+from firebase_admin import credentials, firestore
 
-# ==========================================
-# 1. APP CONFIGURATION (Must be first)
-# ==========================================
-st.set_page_config(
-    page_title="Seller OS: Enterprise",
-    page_icon="💎",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# --- 0. LOGIN SYSTEM (FIXED & PERMANENT) ---
+def check_password():
+    def password_entered():
+        if st.session_state["username"] in st.secrets["passwords"] and \
+           st.session_state["password"] == st.secrets["passwords"][st.session_state["username"]]:
+            st.session_state["password_correct"] = True
+            st.session_state["logged_in_user"] = st.session_state["username"]
+            del st.session_state["password"] 
+        else:
+            st.session_state["password_correct"] = False
 
-# ==========================================
-# 2. ADVANCED STYLING (CSS)
-# ==========================================
+    if "password_correct" not in st.session_state:
+        st.markdown("<h1 style='text-align:center;'>⚡ Life OS Pro Login</h1>", unsafe_allow_html=True)
+        st.text_input("Username (Email)", key="username")
+        st.text_input("Password", type="password", on_change=password_entered, key="password")
+        return False
+    elif not st.session_state["password_correct"]:
+        st.text_input("Username (Email)", key="username")
+        st.text_input("Password", type="password", on_change=password_entered, key="password")
+        st.error("😕 User not known or password incorrect")
+        return False
+    else:
+        return True
+
+# --- 1. CONFIG & AUTH ---
+st.set_page_config(page_title="Life OS Ultimate", page_icon="🚀", layout="wide", initial_sidebar_state="expanded")
+
+if not check_password():
+    st.stop()
+
+current_user_id = st.session_state["logged_in_user"]
+
+# --- 2. FIREBASE CONNECTION ---
+if not firebase_admin._apps:
+    try:
+        key_content = st.secrets["firebase"]["my_key"]
+        key_dict = json.loads(key_content)
+        cred = credentials.Certificate(key_dict)
+        firebase_admin.initialize_app(cred)
+    except Exception as e:
+        st.error(f"🚨 Connection Error: {e}")
+        st.stop()
+
+db = firestore.client()
+
+# --- 3. DATA FUNCTIONS (CLOUD SAVING) ---
+def load_user_data(user_id):
+    try:
+        doc_ref = db.collection("users").document(user_id)
+        doc = doc_ref.get()
+        return doc.to_dict() if doc.exists else None
+    except: return None
+
+def save_user_data(user_id):
+    try:
+        data = {
+            "goals": st.session_state.goals, "habits": st.session_state.habits,
+            "balance": st.session_state.balance, "transactions": st.session_state.transactions,
+            "water": st.session_state.water, "xp": st.session_state.xp,
+            "level": st.session_state.level, "user_name": st.session_state.user_name,
+            "currency": st.session_state.currency, "timezone": st.session_state.timezone,
+            "journal_logs": st.session_state.journal_logs, "biz_revenue": st.session_state.get('biz_revenue', 0)
+        }
+        db.collection("users").document(user_id).set(data)
+    except: pass
+
+# --- 4. STATE INITIALIZATION ---
+if 'data_loaded' not in st.session_state:
+    saved_data = load_user_data(current_user_id)
+    if saved_data:
+        for k, v in saved_data.items(): st.session_state[k] = v
+    else:
+        # Initial Defaults
+        st.session_state.update({
+            "user_name": "Boss", "xp": 0, "level": 1, "balance": 0, "water": 0,
+            "transactions": [], "goals": [], "habits": [], "currency": "PKR",
+            "journal_logs": [], "timezone": "Asia/Karachi", "biz_revenue": 0
+        })
+    st.session_state.data_loaded = True
+
+# --- 5. PREMIUM STYLING (GLASSMORPHISM) ---
 st.markdown("""
 <style>
-    /* Main Theme */
-    .stApp {
-        background-color: #000000;
-        color: #ffffff;
-    }
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Poppins:wght@300;400;600&display=swap');
     
-    /* Neon Cards */
-    div[data-testid="metric-container"] {
-        background-color: #111111;
-        border: 1px solid #333;
+    .stApp { background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); color: white; }
+    .glass-card {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
         padding: 20px;
-        border-radius: 15px;
-        box-shadow: 0 0 10px rgba(0, 255, 127, 0.1);
-        transition: all 0.3s ease;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        margin-bottom: 20px;
     }
-    div[data-testid="metric-container"]:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 0 20px rgba(0, 255, 127, 0.4);
-        border-color: #00FF7F;
+    .neon-text {
+        font-family: 'Orbitron', sans-serif;
+        color: #00f2fe;
+        text-shadow: 0 0 10px #00f2fe;
     }
-    
-    /* Custom Sidebar */
-    section[data-testid="stSidebar"] {
-        background-color: #050505;
-        border-right: 1px solid #222;
-    }
-    
-    /* Gradient Buttons */
     .stButton>button {
-        background: linear-gradient(45deg, #FF0080, #7928CA);
-        color: white;
-        border: none;
-        padding: 12px 24px;
-        border-radius: 8px;
-        font-weight: bold;
-        letter-spacing: 1px;
+        background: linear-gradient(90deg, #00f2fe 0%, #4facfe 100%);
+        color: black; border: none; border-radius: 12px; font-weight: bold;
+        transition: 0.3s;
     }
-    .stButton>button:hover {
-        opacity: 0.9;
-        box-shadow: 0 0 15px rgba(255, 0, 128, 0.5);
-    }
-    
-    /* Success Messages */
-    .stSuccess {
-        background-color: rgba(0, 255, 127, 0.1);
-        border-left: 5px solid #00FF7F;
-    }
-    
-    /* Tables */
-    div[data-testid="stDataFrame"] {
-        border: 1px solid #333;
-        border-radius: 10px;
-    }
+    .stButton>button:hover { transform: scale(1.02); box-shadow: 0 0 15px #00f2fe; }
 </style>
 """, unsafe_allow_html=True)
 
-# ==========================================
-# 3. SESSION STATE (Database)
-# ==========================================
-if 'db_orders' not in st.session_state:
-    # Sample Data for Demo
-    sample_data = [
-        {"Order ID": "ORD-1001", "Date": "2024-01-20", "Customer": "Ali Khan", "City": "Lahore", "Item": "Gaming Mouse", "Qty": 1, "Total": 2500, "Status": "Delivered", "Source": "Facebook"},
-        {"Order ID": "ORD-1002", "Date": "2024-01-21", "Customer": "Sara Ahmed", "City": "Karachi", "Item": "Headphones", "Qty": 2, "Total": 6000, "Status": "Pending", "Source": "Instagram"},
-    ]
-    st.session_state.db_orders = pd.DataFrame(sample_data)
-
-if 'db_products' not in st.session_state:
-    st.session_state.db_products = pd.DataFrame([
-        {"SKU": "GM-01", "Name": "Gaming Mouse", "Cost": 1500, "Price": 2500, "Stock": 15},
-        {"SKU": "HP-02", "Name": "Headphones", "Cost": 2000, "Price": 3000, "Stock": 8},
-        {"SKU": "KB-03", "Name": "RGB Keyboard", "Cost": 3500, "Price": 5500, "Stock": 3}, # Low Stock
-    ])
-
-if 'daily_target' not in st.session_state:
-    st.session_state.daily_target = 50000
-
-# ==========================================
-# 4. SIDEBAR NAVIGATION
-# ==========================================
+# --- 6. NAVIGATION & SIDEBAR ---
 with st.sidebar:
-    st.title("💎 Seller OS")
-    st.caption("Enterprise Edition v2.0")
+    st.markdown(f"<h1 class='neon-text'>🚀 {st.session_state.user_name}</h1>", unsafe_allow_html=True)
+    st.write(f"Level {st.session_state.level} • {st.session_state.xp} XP")
+    st.progress(min(st.session_state.xp / (st.session_state.level * 100), 1.0))
     
-    # User Profile (Fake)
-    st.markdown("""
-    <div style="display: flex; align-items: center; margin-bottom: 20px;">
-        <img src="https://ui-avatars.com/api/?name=Dawood+Boss&background=random" style="border-radius: 50%; width: 40px; margin-right: 10px;">
-        <div>
-            <h4 style="margin:0;">Dawood</h4>
-            <small style="color: #00FF7F;">● Online</small>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    if st.button("Logout"):
+        del st.session_state["password_correct"]
+        st.rerun()
     
-    menu = st.radio("MAIN MENU", [
-        "🚀 Command Center", 
-        "🛒 New Order (POS)", 
-        "📦 Inventory Hub", 
-        "🚚 Order Operations", 
-        "💰 Financials"
-    ])
-    
-    st.divider()
-    
-    # 🎯 Daily Target Widget
-    st.markdown("### 🎯 Today's Goal")
-    today_sales = st.session_state.db_orders[st.session_state.db_orders['Date'] == datetime.now().strftime("%Y-%m-%d")]['Total'].sum()
-    progress = min(today_sales / st.session_state.daily_target, 1.0)
-    st.progress(progress)
-    st.caption(f"PKR {today_sales:,} / {st.session_state.daily_target:,}")
-    
-    if progress >= 1.0:
+    menu = st.radio("System Access", ["📊 Intelligence", "🎯 Missions", "💰 Financials", "⚡ Boss Mode", "💪 Bio-Status", "📝 Logs", "⚙️ Core"])
+
+# --- 7. HELPER FUNCTIONS ---
+def check_level_up(xp_gain):
+    st.session_state.xp += xp_gain
+    req = st.session_state.level * 100
+    if st.session_state.xp >= req:
+        st.session_state.level += 1
+        st.session_state.xp = 0
         st.balloons()
+        st.toast("🎉 LEVEL UP! New potential unlocked.", icon="🆙")
+    save_user_data(current_user_id)
 
-# ==========================================
-# 5. MAIN PAGES
-# ==========================================
+# --- 8. MODULES ---
+tz = pytz.timezone(st.session_state.timezone)
+now = datetime.now(tz)
 
-# --- 🚀 COMMAND CENTER (Dashboard) ---
-if menu == "🚀 Command Center":
-    st.markdown("# 🚀 Business Overview")
-    st.markdown(f"**{datetime.now().strftime('%A, %d %B %Y')}**")
+if menu == "📊 Intelligence":
+    st.markdown("<h2 class='neon-text'>Strategic Overview</h2>", unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3)
+    with c1: st.markdown(f"<div class='glass-card'><h5>Total Balance</h5><h2 style='color:#00ff87;'>{st.session_state.currency} {st.session_state.balance}</h2></div>", unsafe_allow_html=True)
+    with c2: st.markdown(f"<div class='glass-card'><h5>Missions Pending</h5><h2 style='color:#ff4b2b;'>{sum(1 for g in st.session_state.goals if not g['done'])}</h2></div>", unsafe_allow_html=True)
+    with c3: st.markdown(f"<div class='glass-card'><h5>Business Revenue</h5><h2 style='color:#f9d423;'>{st.session_state.currency} {st.session_state.biz_revenue}</h2></div>", unsafe_allow_html=True)
     
-    # Top Stats Cards
-    total_rev = st.session_state.db_orders['Total'].sum()
-    total_orders = len(st.session_state.db_orders)
-    pending_orders = len(st.session_state.db_orders[st.session_state.db_orders['Status'] == 'Pending'])
-    
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("💰 Total Revenue", f"PKR {total_rev:,}", "+15%")
-    c2.metric("📦 Total Orders", total_orders, "+4")
-    c3.metric("⏳ Pending Dispatch", pending_orders, delta_color="inverse")
-    c4.metric("🔥 Conversion Rate", "3.2%", "+0.5%")
-    
-    st.divider()
-    
-    # Charts Section
-    col_chart1, col_chart2 = st.columns([2, 1])
-    
-    with col_chart1:
-        st.subheader("📈 Sales Performance")
-        # Fake hourly data generation for graph feel
-        chart_data = pd.DataFrame({
-            "Time": ["9 AM", "12 PM", "3 PM", "6 PM", "9 PM"],
-            "Sales": [5000, 12000, 8000, 25000, 15000]
-        })
-        fig = px.area(chart_data, x="Time", y="Sales", template="plotly_dark", color_discrete_sequence=["#00FF7F"])
-        fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+    if st.session_state.transactions:
+        df = pd.DataFrame(st.session_state.transactions)
+        fig = px.line(df, x='Date', y='Amt', color='Type', title="Cashflow Trend", template="plotly_dark")
         st.plotly_chart(fig, use_container_width=True)
-        
-    with col_chart2:
-        st.subheader("🏙️ Top Cities")
-        if not st.session_state.db_orders.empty:
-            city_counts = st.session_state.db_orders['City'].value_counts()
-            fig2 = px.pie(values=city_counts.values, names=city_counts.index, hole=0.6, template="plotly_dark")
-            fig2.update_layout(paper_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig2, use_container_width=True)
 
-# --- 🛒 NEW ORDER (POS Style) ---
-elif menu == "🛒 New Order (POS)":
-    st.markdown("# 🛒 Create Order")
+elif menu == "🎯 Missions":
+    st.markdown("<h2 class='neon-text'>Active Missions</h2>", unsafe_allow_html=True)
+    with st.expander("➕ Deploy New Mission"):
+        new_g = st.text_input("Mission Name")
+        if st.button("Deploy"):
+            st.session_state.goals.append({"text": new_g, "done": False})
+            save_user_data(current_user_id)
+            st.rerun()
     
-    col_left, col_right = st.columns([2, 1])
-    
-    with col_right:
-        st.info("💡 **Customer Insights**")
-        phone = st.text_input("📞 Phone Number", placeholder="0300-1234567")
-        if phone:
-            st.success("✅ New Customer (No Fraud History)")
-            # Agar purana customer hota to yahan history aati
-            
-    with col_left:
-        with st.form("pos_form"):
-            c1, c2 = st.columns(2)
-            name = c1.text_input("👤 Customer Name")
-            city = c2.selectbox("🏙️ City", ["Karachi", "Lahore", "Islamabad", "Rawalpindi", "Faisalabad", "Multan", "Peshawar", "Other"])
-            address = st.text_area("🏠 Complete Address")
-            
-            st.markdown("---")
-            st.subheader("🛍️ Cart")
-            
-            # Product Selector
-            prod_names = st.session_state.db_products['Name'].tolist()
-            selected_prod = st.selectbox("Select Product", prod_names)
-            
-            # Auto-Fetch Details
-            p_details = st.session_state.db_products[st.session_state.db_products['Name'] == selected_prod].iloc[0]
-            
-            qc1, qc2, qc3 = st.columns(3)
-            qty = qc1.number_input("Quantity", 1, 10, 1)
-            price = qc2.number_input("Unit Price", value=int(p_details['Price']))
-            dc = qc3.number_input("Delivery Charges", value=200)
-            
-            total = (price * qty) + dc
-            
-            # Big Total Display
-            st.markdown(f"""
-            <div style="background:#222; padding:15px; border-radius:10px; text-align:center; border: 1px solid #444;">
-                <h2 style="color:#00FF7F; margin:0;">TOTAL: PKR {total:,}</h2>
-            </div>
-            """, unsafe_allow_html=True)
-            st.write("")
-            
-            if st.form_submit_button("✅ CONFIRM ORDER"):
-                new_order = {
-                    "Order ID": f"ORD-{random.randint(2000, 9999)}",
-                    "Date": datetime.now().strftime("%Y-%m-%d"),
-                    "Customer": name, "City": city, "Item": selected_prod,
-                    "Qty": qty, "Total": total, "Status": "Pending", "Source": "Manual"
-                }
-                st.session_state.db_orders = pd.concat([st.session_state.db_orders, pd.DataFrame([new_order])], ignore_index=True)
-                st.balloons()
-                st.success("Order Placed Successfully!")
+    for i, g in enumerate(st.session_state.goals):
+        col1, col2 = st.columns([0.1, 0.9])
+        if col1.checkbox("", value=g['done'], key=f"g_{i}"):
+            if not g['done']:
+                st.session_state.goals[i]['done'] = True
+                check_level_up(25)
+                st.rerun()
+        col2.write(f"**{g['text']}**" if not g['done'] else f"~~{g['text']}~~")
 
-# --- 📦 INVENTORY HUB ---
-elif menu == "📦 Inventory Hub":
-    st.markdown("# 📦 Inventory Management")
-    
-    # Low Stock Alert
-    low_stock = st.session_state.db_products[st.session_state.db_products['Stock'] < 5]
-    if not low_stock.empty:
-        st.error(f"⚠️ Warning: {len(low_stock)} Items are Low on Stock!")
-        st.dataframe(low_stock)
-    
-    tab1, tab2 = st.tabs(["📋 View Stock", "➕ Add Product"])
-    
-    with tab1:
-        st.dataframe(
-            st.session_state.db_products,
-            use_container_width=True,
-            column_config={
-                "Stock": st.column_config.ProgressColumn("Stock Level", min_value=0, max_value=20, format="%d"),
-                "Price": st.column_config.NumberColumn("Sale Price", format="PKR %d")
-            }
-        )
-        
-    with tab2:
-        with st.form("add_prod"):
-            c1, c2 = st.columns(2)
-            n_sku = c1.text_input("SKU Code")
-            n_name = c2.text_input("Product Name")
-            c3, c4, c5 = st.columns(3)
-            n_cost = c3.number_input("Cost", 0)
-            n_price = c4.number_input("Sale Price", 0)
-            n_stock = c5.number_input("Opening Stock", 0)
-            
-            if st.form_submit_button("Add to Inventory"):
-                new_prod = {"SKU": n_sku, "Name": n_name, "Cost": n_cost, "Price": n_price, "Stock": n_stock}
-                st.session_state.db_products = pd.concat([st.session_state.db_products, pd.DataFrame([new_prod])], ignore_index=True)
-                st.success("Product Added!")
-
-# --- 🚚 ORDER OPERATIONS (The Cool Part) ---
-elif menu == "🚚 Order Operations":
-    st.markdown("# 🚚 Dispatch Center")
-    
-    filter_status = st.radio("Filter Orders:", ["Pending", "Dispatched", "All"], horizontal=True)
-    
-    if filter_status == "All":
-        filtered_df = st.session_state.db_orders
-    else:
-        filtered_df = st.session_state.db_orders[st.session_state.db_orders['Status'] == filter_status]
-    
-    if filtered_df.empty:
-        st.info("No orders found in this category.")
-    else:
-        for index, row in filtered_df.iterrows():
-            with st.expander(f"{row['Order ID']} | {row['Customer']} | PKR {row['Total']}"):
-                col1, col2, col3 = st.columns([2, 1, 1])
-                
-                with col1:
-                    st.write(f"**Item:** {row['Item']} (x{row['Qty']})")
-                    st.write(f"**City:** {row['City']}")
-                    st.caption(f"Date: {row['Date']}")
-                
-                with col2:
-                    st.markdown("##### Actions")
-                    if row['Status'] == 'Pending':
-                        if st.button("📦 Mark Dispatched", key=f"disp_{index}"):
-                            st.session_state.db_orders.at[index, 'Status'] = 'Dispatched'
-                            st.rerun()
-                    
-                    if st.button("🖨️ Print Invoice", key=f"prt_{index}"):
-                        # Simulated Invoice
-                        st.markdown(f"""
-                        <div style="background:white; color:black; padding:20px; border-radius:10px;">
-                            <h3 style="text-align:center;">INVOICE</h3>
-                            <p><b>Order:</b> {row['Order ID']}</p>
-                            <p><b>Customer:</b> {row['Customer']}</p>
-                            <hr>
-                            <p>{row['Item']} x {row['Qty']} = {row['Total']}</p>
-                            <h4 style="text-align:right;">Total: {row['Total']}</h4>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-# --- 💰 FINANCIALS ---
 elif menu == "💰 Financials":
-    st.markdown("# 💰 Financial Health")
-    
-    # Cash Flow Logic
-    delivered_sales = st.session_state.db_orders[st.session_state.db_orders['Status'] == 'Delivered']['Total'].sum()
-    pending_cod = st.session_state.db_orders[st.session_state.db_orders['Status'] != 'Delivered']['Total'].sum()
-    
+    st.markdown("<h2 class='neon-text'>Financial Hub</h2>", unsafe_allow_html=True)
+    tab1, tab2 = st.tabs(["Add Entry", "Ledger"])
+    with tab1:
+        with st.form("wallet_form"):
+            t_type = st.radio("Type", ["Expense 🔴", "Income 🟢"], horizontal=True)
+            cats = ["Food 🍔", "Fuel ⛽", "Business 📈", "Freelance 💻", "Salary 💰", "Fun 🎉", "Education 📚"]
+            cat = st.selectbox("Category", cats)
+            amt = st.number_input("Amount", min_value=1)
+            desc = st.text_input("Description")
+            if st.form_submit_button("Record Transaction"):
+                val = amt if "Income" in t_type else -amt
+                st.session_state.balance += val
+                if "Business" in cat or "Freelance" in cat: st.session_state.biz_revenue += amt
+                st.session_state.transactions.append({"Date": str(now.date()), "Cat": cat, "Amt": amt, "Type": t_type, "Desc": desc})
+                check_level_up(10)
+                st.rerun()
+    with tab2:
+        st.dataframe(pd.DataFrame(st.session_state.transactions[::-1]), use_container_width=True)
+
+elif menu == "⚡ Boss Mode":
+    st.markdown("<h2 class='neon-text'>Deep Focus Timer</h2>", unsafe_allow_html=True)
+    st.write("Focus for 25 minutes to earn bonus XP.")
     col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("""
-        <div style="padding:20px; background:#1E1E1E; border-radius:10px; border-left: 5px solid #00FF7F;">
-            <h3 style="margin:0; color:#888;">Cash In Hand (Bank)</h3>
-            <h1 style="margin:0; color:white;">PKR {:,}</h1>
-        </div>
-        """.format(delivered_sales), unsafe_allow_html=True)
-        
-    with col2:
-        st.markdown("""
-        <div style="padding:20px; background:#1E1E1E; border-radius:10px; border-left: 5px solid #FFA500;">
-            <h3 style="margin:0; color:#888;">Pending at Courier</h3>
-            <h1 style="margin:0; color:white;">PKR {:,}</h1>
-        </div>
-        """.format(pending_cod), unsafe_allow_html=True)
-        
-    st.divider()
-    st.subheader("Expense Tracker")
-    
-    with st.expander("➕ Add Expense"):
-        ce1, ce2, ce3 = st.columns(3)
-        ce1.date_input("Date")
-        ce2.text_input("Description (Ads, Packaging, etc)")
-        ce3.number_input("Amount", 0)
-        st.button("Save Expense")
-        
-    st.info("Feature coming soon: Auto-Calculate Net Profit based on COGS + Expenses.")
+    minutes = col1.number_input("Set Minutes", value=25)
+    if col2.button("Start Focus Session"):
+        ph = st.empty()
+        for i in range(minutes * 60, 0, -1):
+            mm, ss = divmod(i, 60)
+            ph.markdown(f"<h1 style='text-align:center; font-size:100px;'>{mm:02d}:{ss:02d}</h1>", unsafe_allow_html=True)
+            time.sleep(1)
+        st.success("Session Complete! +50 XP")
+        check_level_up(50)
+
+elif menu == "💪 Bio-Status":
+    st.markdown("<h2 class='neon-text'>Biological Tracking</h2>", unsafe_allow_html=True)
+    st.write(f"💧 Water: {st.session_state.water}/8 Glasses")
+    if st.button("➕ Log Hydration"):
+        st.session_state.water += 1
+        check_level_up(5)
+        st.rerun()
+
+elif menu == "📝 Logs":
+    st.markdown("<h2 class='neon-text'>Neural Journal</h2>", unsafe_allow_html=True)
+    mood = st.select_slider("Mood Level", options=["Sad", "Neutral", "Happy", "God Mode"])
+    note = st.text_area("Daily Reflection")
+    if st.button("Sync Log"):
+        st.session_state.journal_logs.append({"Date": str(now.date()), "Mood": mood, "Note": note})
+        check_level_up(15)
+        st.rerun()
+
+elif menu == "⚙️ Core":
+    st.markdown("<h2 class='neon-text'>System Settings</h2>", unsafe_allow_html=True)
+    st.session_state.user_name = st.text_input("Pilot Name", value=st.session_state.user_name)
+    st.session_state.currency = st.text_input("Currency Unit", value=st.session_state.currency)
+    if st.button("Update Core Settings"):
+        save_user_data(current_user_id)
+        st.success("Settings Synced to Cloud.")
