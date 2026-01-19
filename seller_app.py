@@ -62,13 +62,11 @@ def add_product(name, price, cost, stock, sku):
     })
 
 def adjust_stock_manually(product_id, qty, reason):
-    # For offline sales or restock
     ref = db.collection("products").document(product_id)
     curr = ref.get().to_dict()
     if curr:
-        new_stock = int(curr.get('stock', 0)) + int(qty) # qty can be negative
+        new_stock = int(curr.get('stock', 0)) + int(qty)
         ref.update({"stock": new_stock})
-        # Log this adjustment
         tz = pytz.timezone('Asia/Karachi')
         db.collection("stock_logs").add({
             "date": str(datetime.now(tz)),
@@ -80,15 +78,10 @@ def adjust_stock_manually(product_id, qty, reason):
 
 def create_order(customer, phone, address, items, subtotal, delivery_charged, actual_shipping_cost, packaging_cost, total, source):
     tz = pytz.timezone('Asia/Karachi')
-    
-    # Cost Calculations
     product_cost = sum([item['cost'] * item['qty'] for item in items])
     total_expense_on_order = product_cost + actual_shipping_cost + packaging_cost
-    
-    # Net Profit on this order
     net_profit = total - total_expense_on_order
     
-    # 1. Save Order
     db.collection("orders").add({
         "date": str(datetime.now(tz)),
         "customer": customer,
@@ -96,28 +89,29 @@ def create_order(customer, phone, address, items, subtotal, delivery_charged, ac
         "address": address,
         "items": items,
         "subtotal": int(subtotal),
-        "delivery_charged": int(delivery_charged), # Customer paid this
-        "actual_shipping_cost": int(actual_shipping_cost), # You paid courier this
-        "packaging_cost": int(packaging_cost), # Flyer/Box cost
-        "total": int(total), # COD Amount
+        "delivery_charged": int(delivery_charged),
+        "actual_shipping_cost": int(actual_shipping_cost),
+        "packaging_cost": int(packaging_cost),
+        "total": int(total),
         "net_profit": int(net_profit),
         "source": source,
         "status": "Pending",
         "timestamp": firestore.SERVER_TIMESTAMP
     })
     
-    # 2. Auto-Deduct Stock
     for item in items:
         adjust_stock_manually(item['id'], -item['qty'], "Online Order")
 
+def update_order_status(order_id, new_status):
+    db.collection("orders").document(order_id).update({"status": new_status})
+
 def log_general_expense(desc, amount, category):
-    # Marketing ads, Office rent, etc.
     tz = pytz.timezone('Asia/Karachi')
     db.collection("expenses").add({
         "date": str(datetime.now(tz)),
         "desc": desc,
         "amount": int(amount),
-        "category": category, # Marketing, Operations, etc.
+        "category": category,
         "timestamp": firestore.SERVER_TIMESTAMP
     })
 
@@ -159,7 +153,6 @@ if menu == "📊 Profit Dashboard":
     orders = get_data("orders")
     expenses = get_data("expenses")
     
-    # Calculations
     total_sales = 0
     gross_profit_orders = 0
     total_marketing = 0
@@ -167,7 +160,6 @@ if menu == "📊 Profit Dashboard":
     
     if orders:
         df_ord = pd.DataFrame(orders)
-        # Check if 'total' exists before summing to avoid errors on empty data
         if 'total' in df_ord.columns:
             total_sales = df_ord['total'].sum()
         if 'net_profit' in df_ord.columns:
@@ -181,7 +173,6 @@ if menu == "📊 Profit Dashboard":
     
     final_net_profit = gross_profit_orders - total_marketing - total_ops
     
-    # KPI ROW 1
     c1, c2, c3, c4 = st.columns(4)
     c1.markdown(f"<div class='kpi-card'><div class='kpi-title'>Total Sales (COD)</div><div class='kpi-val'>Rs {total_sales:,}</div></div>", unsafe_allow_html=True)
     c2.markdown(f"<div class='kpi-card'><div class='kpi-title'>Order Gross Profit</div><div class='kpi-val success-val'>Rs {gross_profit_orders:,}</div></div>", unsafe_allow_html=True)
@@ -214,7 +205,6 @@ elif menu == "📝 New Order":
                         "subtotal": prod_obj['price'] * qty
                     })
             
-            # Cart Display
             if st.session_state.cart_adv:
                 st.dataframe(pd.DataFrame(st.session_state.cart_adv)[['name', 'qty', 'subtotal']], hide_index=True)
                 if st.button("Clear Cart"): st.session_state.cart_adv = []
@@ -230,16 +220,13 @@ elif menu == "📝 New Order":
             st.divider()
             st.markdown("##### 💰 Financials")
             
-            # Auto Calc Subtotal
             sub_t = sum([i['subtotal'] for i in st.session_state.cart_adv])
             st.write(f"Product Total: Rs {sub_t}")
             
-            # --- PROFIT KILLERS ---
             c_a, c_b = st.columns(2)
             del_charged = c_a.number_input("Delivery (Customer Pays)", value=200)
-            ship_cost = c_b.number_input("Actual Courier Cost (You Pay)", value=180, help="TCS/Leopard cost")
-            
-            pack_cost = st.number_input("Packaging Cost (Flyer/Box)", value=15)
+            ship_cost = c_b.number_input("Actual Courier Cost (You Pay)", value=180)
+            pack_cost = st.number_input("Packaging Cost", value=15)
             
             final_cod = sub_t + del_charged
             st.markdown(f"### COD Amount: Rs {final_cod}")
@@ -270,7 +257,6 @@ elif menu == "💸 Expenses (Ads/Ops)":
             time.sleep(1)
             st.rerun()
             
-    # Show Recent Expenses
     exps = get_data("expenses")
     if exps:
         st.write("### Recent Spending")
@@ -283,7 +269,7 @@ elif menu == "📦 Inventory & Stock":
     tab1, tab2 = st.tabs(["Stock Adjustment (Offline)", "Product Catalog"])
     
     with tab1:
-        st.info("Agar 'Offline Sale' hui hai ya stock damage hua hai, yahan adjust karein.")
+        st.info("Offline Sale / Damage Adjustment")
         prods = get_products()
         p_list = [p['name'] for p in prods]
         
@@ -296,7 +282,6 @@ elif menu == "📦 Inventory & Stock":
             target_p = next(p for p in prods if p['name'] == sel_prod)
             final_qty = -qty_adj if "Reduce" in action else qty_adj
             reason = "Offline Sale/Manual" if "Reduce" in action else "Restock"
-            
             adjust_stock_manually(target_p['id'], final_qty, reason)
             st.success(f"Stock Updated: {action} {qty_adj}")
             time.sleep(1)
@@ -314,19 +299,44 @@ elif menu == "📦 Inventory & Stock":
                     add_product(name, pr, co, stk, sku)
                     st.success("Saved")
                     st.rerun()
-        
         if prods:
             df = pd.DataFrame(prods)
             st.dataframe(df[['name', 'stock', 'price', 'cost', 'sku']], use_container_width=True)
 
-# === ORDER MANAGER ===
+# === ORDER MANAGER (UPDATED) ===
 elif menu == "🚚 Order Manager":
-    st.subheader("Track Orders")
+    st.subheader("Track & Update Orders")
     orders = get_data("orders")
+    
     if orders:
+        status_options = ["Pending", "Shipped", "Delivered", "Returned", "Cancelled"]
+        
         for o in orders:
-            with st.expander(f"{o['date']} | {o['customer']} | Profit: Rs {o.get('net_profit', 0)}"):
-                st.write(f"**Items:** {[i['name'] for i in o['items']]}")
-                st.write(f"Status: **{o['status']}**")
-                # Profit Breakdown
-                st.caption(f"Breakdown: Revenue {o['total']} - (Prod Cost + Shipping {o.get('actual_shipping_cost',0)} + Pack {o.get('packaging_cost',0)}) = Profit {o.get('net_profit',0)}")
+            # Color code for status
+            status_color = "red"
+            if o['status'] == "Delivered": status_color = "green"
+            elif o['status'] == "Shipped": status_color = "blue"
+            elif o['status'] == "Pending": status_color = "orange"
+            
+            with st.expander(f"{o['date']} | {o['customer']} | Rs {o['total']} ({o['status']})"):
+                c1, c2 = st.columns([3, 1])
+                
+                with c1:
+                    st.write(f"**Items:** {[i['name'] + ' x' + str(i['qty']) for i in o['items']]}")
+                    st.caption(f"Address: {o.get('address', 'N/A')} | Phone: {o.get('phone', 'N/A')}")
+                    st.caption(f"Profit on this Order: Rs {o.get('net_profit', 0)}")
+                
+                with c2:
+                    current_idx = 0
+                    if o['status'] in status_options:
+                        current_idx = status_options.index(o['status'])
+                    
+                    new_val = st.selectbox("Change Status", status_options, index=current_idx, key=o['id'])
+                    
+                    if new_val != o['status']:
+                        update_order_status(o['id'], new_val)
+                        st.toast(f"Status Updated to {new_val}")
+                        time.sleep(1)
+                        st.rerun()
+    else:
+        st.info("No active orders found.")
