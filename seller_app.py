@@ -80,6 +80,8 @@ def create_order(customer, phone, address, items, subtotal, delivery_charged, ac
     tz = pytz.timezone('Asia/Karachi')
     product_cost = sum([item['cost'] * item['qty'] for item in items])
     total_expense_on_order = product_cost + actual_shipping_cost + packaging_cost
+    
+    # Initial Profit Calculation (Assuming Delivery)
     net_profit = total - total_expense_on_order
     
     db.collection("orders").add({
@@ -93,7 +95,7 @@ def create_order(customer, phone, address, items, subtotal, delivery_charged, ac
         "actual_shipping_cost": int(actual_shipping_cost),
         "packaging_cost": int(packaging_cost),
         "total": int(total),
-        "net_profit": int(net_profit),
+        "net_profit": int(net_profit), # Stored for reference, but Dashboard recalculates based on Status
         "source": source,
         "status": "Pending",
         "timestamp": firestore.SERVER_TIMESTAMP
@@ -131,6 +133,7 @@ st.markdown("""
     .kpi-val { font-size: 26px; font-weight: 700; color: #333; }
     .success-val { color: #2E7D32; }
     .danger-val { color: #D32F2F; }
+    .loss-val { color: #b71c1c; }
     .stButton>button { border-radius: 8px; font-weight: 600; }
 </style>
 """, unsafe_allow_html=True)
@@ -154,32 +157,52 @@ if menu == "📊 Profit Dashboard":
     expenses = get_data("expenses")
     
     total_sales = 0
-    gross_profit_orders = 0
+    calculated_profit = 0
+    returned_loss = 0
+    
+    # --- LOGIC FOR PROFIT CALCULATION ---
+    if orders:
+        for o in orders:
+            status = o.get('status', 'Pending')
+            
+            # 1. Successful Orders (Pending/Shipped/Delivered)
+            if status in ['Pending', 'Shipped', 'Delivered']:
+                total_sales += o.get('total', 0)
+                calculated_profit += o.get('net_profit', 0)
+            
+            # 2. Returned Orders (LOSS LOGIC)
+            elif status == 'Returned':
+                # Revenue is 0 (Customer didn't pay)
+                # Loss = Courier Cost + Packaging Cost
+                loss = o.get('actual_shipping_cost', 0) + o.get('packaging_cost', 0)
+                calculated_profit -= loss # Deduct from total profit
+                returned_loss += loss
+            
+            # 3. Cancelled (No Impact)
+            elif status == 'Cancelled':
+                pass 
+
+    # Subtract General Expenses (Ads, Rent)
     total_marketing = 0
     total_ops = 0
-    
-    if orders:
-        df_ord = pd.DataFrame(orders)
-        if 'total' in df_ord.columns:
-            total_sales = df_ord['total'].sum()
-        if 'net_profit' in df_ord.columns:
-            gross_profit_orders = df_ord['net_profit'].sum()
-    
     if expenses:
         df_exp = pd.DataFrame(expenses)
         if 'category' in df_exp.columns and 'amount' in df_exp.columns:
             total_marketing = df_exp[df_exp['category'] == 'Marketing (Ads)']['amount'].sum()
             total_ops = df_exp[df_exp['category'] != 'Marketing (Ads)']['amount'].sum()
     
-    final_net_profit = gross_profit_orders - total_marketing - total_ops
+    final_net_profit = calculated_profit - total_marketing - total_ops
     
+    # KPI ROW
     c1, c2, c3, c4 = st.columns(4)
-    c1.markdown(f"<div class='kpi-card'><div class='kpi-title'>Total Sales (COD)</div><div class='kpi-val'>Rs {total_sales:,}</div></div>", unsafe_allow_html=True)
-    c2.markdown(f"<div class='kpi-card'><div class='kpi-title'>Order Gross Profit</div><div class='kpi-val success-val'>Rs {gross_profit_orders:,}</div></div>", unsafe_allow_html=True)
-    c3.markdown(f"<div class='kpi-card'><div class='kpi-title'>Marketing Spend</div><div class='kpi-val danger-val'>Rs {total_marketing:,}</div></div>", unsafe_allow_html=True)
-    c4.markdown(f"<div class='kpi-card'><div class='kpi-title'>🔥 REAL NET PROFIT</div><div class='kpi-val success-val'>Rs {final_net_profit:,}</div></div>", unsafe_allow_html=True)
+    c1.markdown(f"<div class='kpi-card'><div class='kpi-title'>Total Sales (Active)</div><div class='kpi-val'>Rs {total_sales:,}</div></div>", unsafe_allow_html=True)
+    c2.markdown(f"<div class='kpi-card'><div class='kpi-title'>Marketing Spend</div><div class='kpi-val danger-val'>Rs {total_marketing:,}</div></div>", unsafe_allow_html=True)
+    c3.markdown(f"<div class='kpi-card'><div class='kpi-title'>Return Loss (Courier)</div><div class='kpi-val loss-val'>- Rs {returned_loss:,}</div></div>", unsafe_allow_html=True)
     
-    st.info("💡 **Formula:** (Order Revenue - Product Cost - Shipping - Packaging) - (Ads + Other Expenses)")
+    color = "success-val" if final_net_profit >= 0 else "loss-val"
+    c4.markdown(f"<div class='kpi-card'><div class='kpi-title'>🔥 REAL NET PROFIT</div><div class='kpi-val {color}'>Rs {final_net_profit:,}</div></div>", unsafe_allow_html=True)
+    
+    st.info("💡 **Return Logic:** Agar order 'Returned' mark hoga, to Revenue 0 ho jaye ga aur Courier+Packing ka kharcha Profit mein se minus ho jaye ga.")
 
 # === NEW ORDER ===
 elif menu == "📝 New Order":
@@ -225,8 +248,8 @@ elif menu == "📝 New Order":
             
             c_a, c_b = st.columns(2)
             del_charged = c_a.number_input("Delivery (Customer Pays)", value=200)
-            ship_cost = c_b.number_input("Actual Courier Cost (You Pay)", value=180)
-            pack_cost = st.number_input("Packaging Cost", value=15)
+            ship_cost = c_b.number_input("Actual Courier Cost (You Pay)", value=180, help="Ye profit se minus hoga")
+            pack_cost = st.number_input("Packaging Cost (Flyer)", value=15)
             
             final_cod = sub_t + del_charged
             st.markdown(f"### COD Amount: Rs {final_cod}")
@@ -303,7 +326,7 @@ elif menu == "📦 Inventory & Stock":
             df = pd.DataFrame(prods)
             st.dataframe(df[['name', 'stock', 'price', 'cost', 'sku']], use_container_width=True)
 
-# === ORDER MANAGER (UPDATED) ===
+# === ORDER MANAGER (ENHANCED DETAILS) ===
 elif menu == "🚚 Order Manager":
     st.subheader("Track & Update Orders")
     orders = get_data("orders")
@@ -312,31 +335,44 @@ elif menu == "🚚 Order Manager":
         status_options = ["Pending", "Shipped", "Delivered", "Returned", "Cancelled"]
         
         for o in orders:
-            # Color code for status
-            status_color = "red"
-            if o['status'] == "Delivered": status_color = "green"
-            elif o['status'] == "Shipped": status_color = "blue"
-            elif o['status'] == "Pending": status_color = "orange"
+            # Dynamic Header Info
+            date_short = o['date'].split('.')[0] # Remove microseconds
+            cust_name = o.get('customer', 'Unknown')
+            city_guess = o.get('address', '').split(',')[-1].strip() if ',' in o.get('address', '') else "PAK"
             
-            with st.expander(f"{o['date']} | {o['customer']} | Rs {o['total']} ({o['status']})"):
-                c1, c2 = st.columns([3, 1])
+            header_text = f"📅 {date_short} | 👤 {cust_name} | 📍 {city_guess} | 💰 Rs {o['total']} ({o['status']})"
+            
+            with st.expander(header_text):
+                # Detailed View
+                c1, c2 = st.columns([2, 1])
                 
                 with c1:
-                    st.write(f"**Items:** {[i['name'] + ' x' + str(i['qty']) for i in o['items']]}")
-                    st.caption(f"Address: {o.get('address', 'N/A')} | Phone: {o.get('phone', 'N/A')}")
-                    st.caption(f"Profit on this Order: Rs {o.get('net_profit', 0)}")
+                    st.markdown("#### 📋 Order Details")
+                    st.write(f"**Customer:** {cust_name}")
+                    st.write(f"**Phone:** {o.get('phone', 'N/A')}")
+                    st.write(f"**Address:** {o.get('address', 'N/A')}")
+                    st.write(f"**Source:** {o.get('source', 'Web')}")
+                    st.markdown("---")
+                    st.write("**Items:**")
+                    for item in o['items']:
+                        st.write(f"- {item['name']} (x{item['qty']})")
                 
                 with c2:
-                    current_idx = 0
-                    if o['status'] in status_options:
-                        current_idx = status_options.index(o['status'])
-                    
-                    new_val = st.selectbox("Change Status", status_options, index=current_idx, key=o['id'])
+                    st.markdown("#### ⚙️ Action")
+                    current_idx = status_options.index(o['status']) if o['status'] in status_options else 0
+                    new_val = st.selectbox("Status", status_options, index=current_idx, key=f"s_{o['id']}")
                     
                     if new_val != o['status']:
                         update_order_status(o['id'], new_val)
-                        st.toast(f"Status Updated to {new_val}")
+                        st.toast(f"Updated to {new_val}")
                         time.sleep(1)
                         st.rerun()
+                    
+                    st.markdown("#### 💸 Financials")
+                    if o['status'] == 'Returned':
+                        loss = o.get('actual_shipping_cost', 0) + o.get('packaging_cost', 0)
+                        st.error(f"⚠️ RETURN LOSS: Rs {loss}")
+                    else:
+                        st.success(f"Est. Profit: Rs {o.get('net_profit', 0)}")
     else:
         st.info("No active orders found.")
