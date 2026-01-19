@@ -11,48 +11,11 @@ import json
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# --- 0. LOGIN SYSTEM (FIXED) ---
-def check_password():
-    """Returns `True` if the user had a correct password."""
-    
-    def password_entered():
-        # Check if password matches
-        if st.session_state["username"] in st.secrets["passwords"] and \
-           st.session_state["password"] == st.secrets["passwords"][st.session_state["username"]]:
-            
-            st.session_state["password_correct"] = True
-            # 🔴 CRITICAL FIX: Username ko permanent variable mein save karna
-            st.session_state["logged_in_user"] = st.session_state["username"]
-            
-            del st.session_state["password"]  # Password memory se delete
-        else:
-            st.session_state["password_correct"] = False
-
-    if "password_correct" not in st.session_state:
-        # First run, show inputs
-        st.text_input("Username (Email)", key="username")
-        st.text_input("Password", type="password", on_change=password_entered, key="password")
-        return False
-    elif not st.session_state["password_correct"]:
-        # Password incorrect, show inputs again + error
-        st.text_input("Username (Email)", key="username")
-        st.text_input("Password", type="password", on_change=password_entered, key="password")
-        st.error("😕 User not known or password incorrect")
-        return False
-    else:
-        # Password correct
-        return True
-
-# --- 1. CONFIG & AUTH ---
+# --- 1. CONFIG (MUST BE FIRST) ---
 st.set_page_config(page_title="Life OS Pro", page_icon="⚡", layout="wide", initial_sidebar_state="collapsed")
 
-if not check_password():
-    st.stop()
-
-# Ab hum "username" ki bajaye "logged_in_user" use karenge jo delete nahi hoga
-current_user_id = st.session_state["logged_in_user"]
-
-# --- 2. FIREBASE CONNECTION ---
+# --- 2. FIREBASE CONNECTION (MOVED UP FOR LOGIN) ---
+# Login check karne se pehle DB connect hona zaroori hai
 if not firebase_admin._apps:
     try:
         key_content = st.secrets["firebase"]["my_key"]
@@ -65,7 +28,55 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
-# --- 3. DATA FUNCTIONS ---
+# --- 3. LOGIN SYSTEM (DATABASE EDITION) ---
+def check_password():
+    """Checks login against Firebase Database 'users' collection."""
+    
+    def password_entered():
+        entered_user = st.session_state["username"]
+        entered_pass = st.session_state["password"]
+        
+        try:
+            # 1. Database se user dhoondo
+            doc_ref = db.collection("users").document(entered_user)
+            doc = doc_ref.get()
+            
+            # 2. Check karo agar user hai aur password match hua
+            if doc.exists:
+                user_data = doc.to_dict()
+                if user_data.get('password') == entered_pass:
+                    st.session_state["password_correct"] = True
+                    st.session_state["logged_in_user"] = entered_user
+                    del st.session_state["password"]
+                else:
+                    st.session_state["password_correct"] = False
+                    st.error("❌ Password ghalat hai!")
+            else:
+                st.session_state["password_correct"] = False
+                st.error("❌ Ye user exist nahi karta. Admin se contact karein.")
+                
+        except Exception as e:
+            st.error(f"Login Error: {e}")
+
+    if "password_correct" not in st.session_state:
+        st.markdown("<h1 style='text-align:center;'>⚡ Life OS Login</h1>", unsafe_allow_html=True)
+        st.text_input("Email (Username)", key="username")
+        st.text_input("Password", type="password", on_change=password_entered, key="password")
+        return False
+    elif not st.session_state["password_correct"]:
+        st.text_input("Email (Username)", key="username")
+        st.text_input("Password", type="password", on_change=password_entered, key="password")
+        return False
+    else:
+        return True
+
+# --- EXECUTE LOGIN ---
+if not check_password():
+    st.stop()
+
+current_user_id = st.session_state["logged_in_user"]
+
+# --- 4. DATA FUNCTIONS ---
 def load_user_data(user_id):
     try:
         doc_ref = db.collection("users").document(user_id)
@@ -79,6 +90,7 @@ def load_user_data(user_id):
 def save_user_data(user_id):
     try:
         data = {
+            # Password ko overwrite nahi karna, baki sab save karo
             "goals": st.session_state.goals,
             "habits": st.session_state.habits,
             "balance": st.session_state.balance,
@@ -91,11 +103,12 @@ def save_user_data(user_id):
             "timezone": st.session_state.timezone,
             "journal_logs": st.session_state.journal_logs
         }
-        db.collection("users").document(user_id).set(data)
+        # merge=True ka matlab hai purana password delete nahi hoga, sirf naya data update hoga
+        db.collection("users").document(user_id).set(data, merge=True)
     except:
         pass
 
-# --- 4. STATE INITIALIZATION ---
+# --- 5. STATE INITIALIZATION ---
 if 'data_loaded' not in st.session_state:
     saved_data = load_user_data(current_user_id)
     if saved_data:
@@ -112,7 +125,7 @@ if 'data_loaded' not in st.session_state:
         if 'journal_logs' not in st.session_state: st.session_state.journal_logs = saved_data.get("journal_logs", [])
         if 'timezone' not in st.session_state: st.session_state.timezone = saved_data.get("timezone", "Asia/Karachi")
     else:
-        # Defaults
+        # Defaults for New Users
         if 'user_name' not in st.session_state: st.session_state.user_name = "New User"
         if 'xp' not in st.session_state: st.session_state.xp = 0
         if 'level' not in st.session_state: st.session_state.level = 1
@@ -128,7 +141,7 @@ if 'data_loaded' not in st.session_state:
 
 if 'run_effect' not in st.session_state: st.session_state.run_effect = None
 
-# --- 5. UI STYLES & HELPERS ---
+# --- 6. UI STYLES & HELPERS ---
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;800&display=swap');
@@ -177,7 +190,7 @@ elif st.session_state.run_effect == "snow":
     st.snow()
     st.session_state.run_effect = None
 
-# --- 6. MAIN NAVIGATION ---
+# --- 7. MAIN NAVIGATION ---
 try: tz = pytz.timezone(st.session_state.timezone)
 except: tz = pytz.timezone('Asia/Karachi')
 pk_time = datetime.now(tz)
@@ -185,7 +198,7 @@ pk_time = datetime.now(tz)
 with st.sidebar:
     st.title(f"🚀 {st.session_state.user_name}")
     st.caption(f"Lvl {st.session_state.level} • {st.session_state.xp} XP")
-    st.progress(st.session_state.xp / (st.session_state.level * 100))
+    st.progress(min(st.session_state.xp / (st.session_state.level * 100), 1.0))
     if st.button("Logout"):
         del st.session_state["password_correct"]
         st.rerun()
@@ -246,7 +259,7 @@ elif menu == "🎯 Focus":
     else: st.info("No goals.")
     st.markdown("</div>", unsafe_allow_html=True)
 
-# === WALLET (UPDATED WITH EMOJIS) ===
+# === WALLET ===
 elif menu == "💰 Wallet":
     curr = st.session_state.currency
     val = st.session_state.balance
@@ -257,7 +270,6 @@ elif menu == "💰 Wallet":
     with tab1:
         typ = st.radio("Type", ["Expense 🔴", "Income 🟢"], horizontal=True)
         with st.form("money"):
-            # --- EMOJI CATEGORIES ADDED ---
             if "Income" in typ:
                 cats = ["Salary 💰", "Freelance 💻", "Business 📈", "Gift 🎁", "Investments 📊", "Allowance 💵", "Other ➕"]
             else:
