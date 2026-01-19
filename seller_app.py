@@ -70,9 +70,8 @@ if not login_system():
 current_owner = st.session_state["user_session"]
 is_super_admin = st.session_state["is_admin"]
 
-# --- 4. DATA FUNCTIONS (FILTERED BY OWNER) ---
+# --- 4. DATA FUNCTIONS (FIXED - NO INDEX ERROR) ---
 def get_products(owner_id):
-    # Sirf us owner ka data layen
     docs = db.collection("products").where("owner", "==", owner_id).stream()
     return [{"id": d.id, **d.to_dict()} for d in docs]
 
@@ -80,7 +79,7 @@ def add_product(name, price, cost, stock, sku, owner_id):
     db.collection("products").add({
         "name": name, "price": int(price), "cost": int(cost), 
         "stock": int(stock), "sku": sku,
-        "owner": owner_id  # Tagging data with owner
+        "owner": owner_id
     })
 
 def create_order(customer, phone, address, items, subtotal, delivery, ship_cost, pack_cost, total, source, owner_id):
@@ -93,13 +92,18 @@ def create_order(customer, phone, address, items, subtotal, delivery, ship_cost,
         "items": items, "subtotal": subtotal, "delivery": delivery,
         "ship_cost": ship_cost, "pack_cost": pack_cost, "total": total,
         "net_profit": net_profit, "source": source, "status": "Pending",
-        "owner": owner_id, # Tagging
+        "owner": owner_id, 
         "timestamp": firestore.SERVER_TIMESTAMP
     })
 
 def get_orders(owner_id):
-    docs = db.collection("orders").where("owner", "==", owner_id).order_by("timestamp", direction=firestore.Query.DESCENDING).stream()
-    return [{"id": d.id, **d.to_dict()} for d in docs]
+    # FIX: Removed .order_by() from Firestore query to avoid Index Error
+    # We will sort in Python instead
+    docs = db.collection("orders").where("owner", "==", owner_id).stream()
+    data = [{"id": d.id, **d.to_dict()} for d in docs]
+    # Sort locally by timestamp (newest first)
+    data.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+    return data
 
 def log_expense(desc, amount, category, owner_id):
     tz = pytz.timezone('Asia/Karachi')
@@ -110,8 +114,11 @@ def log_expense(desc, amount, category, owner_id):
     })
 
 def get_expenses(owner_id):
-    docs = db.collection("expenses").where("owner", "==", owner_id).order_by("timestamp", direction=firestore.Query.DESCENDING).stream()
-    return [{"id": d.id, **d.to_dict()} for d in docs]
+    # FIX: Removed .order_by() here too
+    docs = db.collection("expenses").where("owner", "==", owner_id).stream()
+    data = [{"id": d.id, **d.to_dict()} for d in docs]
+    data.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+    return data
 
 # --- 5. SUPER ADMIN PANEL (ONLY FOR YOU) ---
 if is_super_admin:
@@ -147,8 +154,6 @@ if is_super_admin:
     st.stop() # Admin yahin ruk jaye
 
 # --- 6. CLIENT DASHBOARD (DUKANDAARON KE LIYE) ---
-# Ye hissa 50 alag alag logon ko unka apna data dikhaye ga
-
 with st.sidebar:
     st.title("🚀 E-Com Dashboard")
     st.caption(f"ID: {current_owner}")
@@ -165,10 +170,17 @@ if menu == "📊 Dashboard":
     expenses = get_expenses(current_owner)
     
     total_sales = sum([o['total'] for o in orders if o['status'] != 'Cancelled'])
-    total_profit = sum([o.get('net_profit',0) for o in orders if o['status'] not in ['Returned', 'Cancelled']])
     
-    # Return Loss Logic
-    return_loss = sum([o.get('ship_cost',0) + o.get('pack_cost',0) for o in orders if o['status'] == 'Returned'])
+    # Simple profit calc to avoid errors if keys missing
+    total_profit = 0
+    return_loss = 0
+    
+    for o in orders:
+        if o['status'] == 'Returned':
+            return_loss += (o.get('ship_cost', 0) + o.get('pack_cost', 0))
+        elif o['status'] != 'Cancelled':
+            total_profit += o.get('net_profit', 0)
+            
     total_profit -= return_loss # Deduct loss
     
     total_exp = sum([e['amount'] for e in expenses])
@@ -225,13 +237,22 @@ elif menu == "📝 New Order":
 elif menu == "🚚 Order Manager":
     st.subheader("Manage Orders")
     orders = get_orders(current_owner)
-    for o in orders:
-        with st.expander(f"{o['date']} - {o['customer']} ({o['status']})"):
-            st.write(o['items'])
-            new_stat = st.selectbox("Status", ["Pending", "Shipped", "Delivered", "Returned", "Cancelled"], key=o['id'])
-            if new_stat != o['status']:
-                db.collection("orders").document(o['id']).update({"status": new_stat})
-                st.rerun()
+    if orders:
+        for o in orders:
+            with st.expander(f"{o.get('date','')} - {o.get('customer','Unknown')} ({o.get('status','')})"):
+                st.write(o.get('items', []))
+                
+                # Check current status index
+                status_opts = ["Pending", "Shipped", "Delivered", "Returned", "Cancelled"]
+                curr_status = o.get('status', 'Pending')
+                if curr_status not in status_opts: curr_status = "Pending"
+                
+                new_stat = st.selectbox("Status", status_opts, index=status_opts.index(curr_status), key=o['id'])
+                if new_stat != curr_status:
+                    db.collection("orders").document(o['id']).update({"status": new_stat})
+                    st.rerun()
+    else:
+        st.info("No orders found.")
 
 # === INVENTORY ===
 elif menu == "📦 Inventory":
