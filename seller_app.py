@@ -8,7 +8,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 
 # --- 1. CONFIG ---
-st.set_page_config(page_title="E-Com Pro (SaaS)", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="E-Com Pro", page_icon="🚀", layout="wide", initial_sidebar_state="expanded")
 
 # --- 2. FIREBASE CONNECTION ---
 if not firebase_admin._apps:
@@ -23,88 +23,115 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
-# --- 3. PREMIUM UI STYLING ---
+# --- 3. DARK MODE UI (PREMIUM SAAS LOOK) ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
     
-    .stApp { background-color: #F3F4F6; font-family: 'Inter', sans-serif; }
+    /* GLOBAL DARK THEME */
+    .stApp { background-color: #0F172A; font-family: 'Inter', sans-serif; color: #F8FAFC; }
     
-    /* Dashboard Cards */
+    /* HEADERS */
+    h1, h2, h3, h4, h5, h6 { color: #F8FAFC !important; font-weight: 700; }
+    p, label, .stMarkdown { color: #CBD5E1 !important; }
+    
+    /* SIDEBAR */
+    section[data-testid="stSidebar"] { background-color: #1E293B; border-right: 1px solid #334155; }
+    section[data-testid="stSidebar"] .stMarkdown { color: #94A3B8 !important; }
+    
+    /* CARDS */
     .kpi-card {
-        background: white; padding: 24px; border-radius: 16px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        border-left: 6px solid #4F46E5;
+        background: #1E293B; 
+        padding: 20px; 
+        border-radius: 12px;
+        border: 1px solid #334155;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
     }
-    .kpi-title { font-size: 14px; font-weight: 600; color: #6B7280; text-transform: uppercase; }
-    .kpi-value { font-size: 32px; font-weight: 800; color: #111827; margin-top: 8px; }
+    .kpi-title { font-size: 13px; font-weight: 600; color: #94A3B8; letter-spacing: 1px; text-transform: uppercase; }
+    .kpi-value { font-size: 28px; font-weight: 800; color: #F8FAFC; margin-top: 5px; }
     
-    /* Invoice Style */
-    .invoice-box {
-        background: white; padding: 30px; border: 1px solid #eee;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.15); font-size: 16px;
-        line-height: 24px; font-family: 'Helvetica Neue', 'Helvetica', Helvetica, Arial, sans-serif;
-        color: #555; margin-top: 20px;
+    /* INPUT FIELDS (Fixing invisible text) */
+    .stTextInput input, .stNumberInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] {
+        background-color: #334155 !important;
+        color: white !important;
+        border: 1px solid #475569 !important;
+        border-radius: 8px;
     }
-    .invoice-header { display: flex; justify-content: space-between; border-bottom: 2px solid #eee; padding-bottom: 20px; }
-    .invoice-item { border-bottom: 1px solid #eee; padding: 10px 0; display: flex; justify-content: space-between; }
-    .invoice-total { border-top: 2px solid #eee; font-weight: bold; padding-top: 10px; margin-top: 10px; text-align: right; }
     
+    /* BUTTONS */
     .stButton>button {
-        background: linear-gradient(135deg, #4F46E5 0%, #4338CA 100%);
+        background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
         color: white; border: none; border-radius: 8px; font-weight: 600;
+        transition: all 0.2s;
     }
+    .stButton>button:hover { transform: scale(1.02); box-shadow: 0 0 15px rgba(99, 102, 241, 0.5); }
+    
+    /* TABLES */
+    .stDataFrame { border: 1px solid #334155; border-radius: 8px; }
+    
+    /* INVOICE BOX (Light Mode inside Dark Mode for printing) */
+    .invoice-box {
+        background: white; color: black; padding: 30px; border-radius: 5px;
+    }
+    .invoice-box div, .invoice-box p, .invoice-box span { color: #333 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. LOGIN SYSTEM (FIXED NAME DISPLAY) ---
+# --- 4. LOGIN SYSTEM (FIXED: 1 CLICK LOGIN) ---
 def login_system():
+    # Session Init
     if "user_session" not in st.session_state:
         st.session_state["user_session"] = None
         st.session_state["is_admin"] = False
-        st.session_state["business_name"] = "My Shop" # Default
+        st.session_state["business_name"] = "My Shop"
 
-    if st.session_state["user_session"]: return True
+    # Already Logged In?
+    if st.session_state["user_session"]: 
+        return True
 
+    # Login UI
     c1, c2, c3 = st.columns([1, 1.5, 1])
     with c2:
-        st.markdown("<br><br><div style='text-align:center; padding: 30px; background: white; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);'>", unsafe_allow_html=True)
-        st.markdown("<h1 style='color:#4F46E5;'>🚀 E-Com Pro</h1>", unsafe_allow_html=True)
+        st.markdown("<br><br><div style='text-align:center; padding: 40px; background: #1E293B; border-radius: 20px; border: 1px solid #334155; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);'>", unsafe_allow_html=True)
+        st.markdown("<h1 style='color:#6366F1; margin-bottom:10px;'>🚀 E-Com Pro</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:14px;'>Secure Merchant Portal</p>", unsafe_allow_html=True)
         
-        email = st.text_input("Email Address")
-        password = st.text_input("Password", type="password")
+        email = st.text_input("Email Address", placeholder="admin@shop.com")
+        password = st.text_input("Password", type="password", placeholder="••••••")
         
-        if st.button("✨ Access Dashboard", use_container_width=True):
+        if st.button("✨ Login", use_container_width=True):
+            # 1. Super Admin Check
             if email == "admin@owner.com" and password == "boss123":
                 st.session_state["user_session"] = "SUPER_ADMIN"
                 st.session_state["is_admin"] = True
-                st.rerun()
+                st.rerun() # <-- YEH HAI MAGIC (Refresh Immediately)
             
+            # 2. Client Check
             try:
                 doc = db.collection("users").document(email).get()
                 if doc.exists:
                     data = doc.to_dict()
                     if data.get("password") == password:
                         st.session_state["user_session"] = email
-                        # FETCH BUSINESS NAME HERE
                         st.session_state["business_name"] = data.get("business_name", email.split('@')[0])
                         st.session_state["is_admin"] = False
-                        st.success(f"Welcome {st.session_state['business_name']}!")
-                        time.sleep(0.5)
-                        st.rerun()
-                    else: st.error("Invalid Credentials")
-                else: st.error("User not found")
-            except: st.error("Login Error")
+                        st.success("Login Successful!")
+                        time.sleep(0.1)
+                        st.rerun() # <-- YEH HAI MAGIC (Refresh Immediately)
+                    else: st.error("❌ Wrong Password")
+                else: st.error("❌ User Not Found")
+            except Exception as e: st.error(f"Error: {e}")
         st.markdown("</div>", unsafe_allow_html=True)
     return False
 
 if not login_system(): st.stop()
 
+# --- GLOBALS ---
 current_owner = st.session_state["user_session"]
 is_super_admin = st.session_state["is_admin"]
 current_biz_name = st.session_state.get("business_name", "My Shop")
 
-# --- 5. FUNCTIONS ---
+# --- 5. DATA FUNCTIONS ---
 def get_products(owner_id):
     docs = db.collection("products").where("owner", "==", owner_id).stream()
     return [{"id": d.id, **d.to_dict()} for d in docs]
@@ -148,29 +175,39 @@ def get_expenses(owner_id):
     data.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
     return data
 
-# --- 6. SUPER ADMIN ---
+# --- 6. SUPER ADMIN UI ---
 if is_super_admin:
-    st.sidebar.title("👑 Super Admin")
+    st.sidebar.markdown("### 👑 Super Admin")
     if st.sidebar.button("Logout"):
         st.session_state["user_session"] = None
         st.rerun()
+    
+    st.title("Admin Control")
     with st.form("new_client"):
-        st.subheader("New Merchant")
-        c_email = st.text_input("Email")
+        st.subheader("Add New Client")
+        c_email = st.text_input("Client Email")
         c_pass = st.text_input("Password")
         c_name = st.text_input("Business Name")
-        if st.form_submit_button("Create"):
-            db.collection("users").document(c_email).set({"password": c_pass, "business_name": c_name})
-            st.success("Created!")
-            st.info(f"User: {c_email} | Biz: {c_name}")
+        if st.form_submit_button("Create Account"):
+            db.collection("users").document(c_email).set({
+                "password": c_pass, "business_name": c_name, "created_at": firestore.SERVER_TIMESTAMP
+            })
+            st.success(f"Client {c_name} Created!")
+    
+    st.write("---")
+    st.write("### Active Clients")
+    users = db.collection("users").stream()
+    for u in users:
+        d = u.to_dict()
+        st.code(f"{d.get('business_name')} | {u.id}")
     st.stop()
 
 # --- 7. MERCHANT UI ---
 with st.sidebar:
-    # UPDATED: Shows Business Name now
-    st.markdown(f"## 🛍️ {current_biz_name}") 
+    st.markdown(f"## 🛍️ {current_biz_name}")
     st.caption(f"ID: {current_owner}")
-    menu = st.radio("Navigate", ["📊 Overview", "📝 New Order", "🚚 Orders", "📦 Inventory", "💸 Expenses"])
+    st.write("---")
+    menu = st.radio("Menu", ["📊 Overview", "📝 New Order", "🚚 Orders", "📦 Inventory", "💸 Expenses"])
     st.write("---")
     if st.button("Logout"):
         st.session_state["user_session"] = None
@@ -189,9 +226,9 @@ if menu == "📊 Overview":
     
     c1, c2, c3, c4 = st.columns(4)
     c1.markdown(f"<div class='kpi-card'><div class='kpi-title'>Revenue</div><div class='kpi-value'>Rs {sales:,}</div></div>", unsafe_allow_html=True)
-    c2.markdown(f"<div class='kpi-card'><div class='kpi-title'>Gross Profit</div><div class='kpi-value' style='color:#10B981'>Rs {profit-loss:,}</div></div>", unsafe_allow_html=True)
-    c3.markdown(f"<div class='kpi-card'><div class='kpi-title'>Expenses</div><div class='kpi-value' style='color:#EF4444'>Rs {sum([e['amount'] for e in expenses]):,}</div></div>", unsafe_allow_html=True)
-    c4.markdown(f"<div class='kpi-card'><div class='kpi-title'>Net Profit</div><div class='kpi-value' style='color:#6366F1'>Rs {net:,}</div></div>", unsafe_allow_html=True)
+    c2.markdown(f"<div class='kpi-card'><div class='kpi-title'>Gross Profit</div><div class='kpi-value' style='color:#4ADE80'>Rs {profit-loss:,}</div></div>", unsafe_allow_html=True)
+    c3.markdown(f"<div class='kpi-card'><div class='kpi-title'>Expenses</div><div class='kpi-value' style='color:#F87171'>Rs {sum([e['amount'] for e in expenses]):,}</div></div>", unsafe_allow_html=True)
+    c4.markdown(f"<div class='kpi-card'><div class='kpi-title'>Net Profit</div><div class='kpi-value' style='color:#818CF8'>Rs {net:,}</div></div>", unsafe_allow_html=True)
 
 # === NEW ORDER ===
 elif menu == "📝 New Order":
@@ -203,36 +240,37 @@ elif menu == "📝 New Order":
     if 'cart' not in st.session_state: st.session_state.cart = []
     
     with c1:
+        st.markdown("### Select Products")
         sel = st.selectbox("Product", ["Select..."] + p_names)
         if sel != "Select...":
             p_obj = next(p for p in products if p['name'] == sel)
             qty = st.number_input("Qty", 1, 100, 1)
             if st.button("Add"): st.session_state.cart.append({"name": sel, "qty": qty, "price": p_obj['price'], "cost": p_obj['cost'], "id": p_obj['id']})
+        
         if st.session_state.cart:
             st.dataframe(pd.DataFrame(st.session_state.cart))
-            if st.button("Clear"): st.session_state.cart = []
+            if st.button("Clear Cart"): st.session_state.cart = []
 
     with c2:
+        st.markdown("### Customer Details")
         with st.form("checkout"):
             cust = st.text_input("Name")
             phone = st.text_input("Phone")
             addr = st.text_area("Address")
-            
-            # UPDATED: More Sources
-            source_list = ["WhatsApp", "Instagram", "Facebook", "TikTok", "Website", "Daraz", "Walk-in (Shop)", "Call", "Referral", "Other"]
-            src = st.selectbox("Source", source_list)
+            src = st.selectbox("Source", ["WhatsApp", "Instagram", "Facebook", "TikTok", "Web", "Walk-in", "Other"])
             
             subt = sum([i['price']*i['qty'] for i in st.session_state.cart])
-            dlv = st.number_input("Delivery Charge (from Cust)", value=200)
-            ship = st.number_input("Actual Courier Cost", value=180)
-            pack = st.number_input("Packing Cost", value=15)
+            c_a, c_b, c_c = st.columns(3)
+            dlv = c_a.number_input("Delivery", value=200)
+            ship = c_b.number_input("Courier Cost", value=180)
+            pack = c_c.number_input("Packing", value=15)
             
-            if st.form_submit_button("Place Order"):
+            if st.form_submit_button("🚀 Place Order"):
                 if st.session_state.cart and cust:
                     create_order(cust, phone, addr, st.session_state.cart, subt, dlv, ship, pack, subt+dlv, src, current_owner)
                     st.session_state.cart = []
-                    st.success("Done!")
-                    time.sleep(1)
+                    st.success("Order Placed!")
+                    time.sleep(0.5)
                     st.rerun()
 
 # === ORDERS & INVOICE ===
@@ -245,8 +283,7 @@ elif menu == "🚚 Orders":
             c1, c2 = st.columns([2, 1])
             with c1:
                 st.write(f"**Items:** {[i['name'] for i in o['items']]}")
-                st.write(f"**Address:** {o.get('address')}")
-                st.write(f"**Source:** {o.get('source', 'Unknown')}")
+                st.caption(f"Address: {o.get('address')} | Phone: {o.get('phone')}")
                 
                 new_stat = st.selectbox("Status", ["Pending", "Shipped", "Delivered", "Returned", "Cancelled"], key=f"s_{o['id']}", index=["Pending", "Shipped", "Delivered", "Returned", "Cancelled"].index(o.get('status', 'Pending')))
                 if new_stat != o.get('status'):
@@ -254,24 +291,20 @@ elif menu == "🚚 Orders":
                     st.rerun()
             
             with c2:
-                # INVOICE
-                if st.button("🧾 View Invoice", key=f"inv_{o['id']}"):
+                if st.button("🧾 Invoice", key=f"inv_{o['id']}"):
                     st.markdown("---")
                     inv_html = f"""
                     <div class="invoice-box">
-                        <div class="invoice-header">
-                            <h2>INVOICE</h2>
-                            <div>
-                                <b>Order ID:</b> {o['id'][:8]}<br>
-                                <b>Date:</b> {o['date'].split('.')[0]}<br>
-                                <b>Merchant:</b> {current_biz_name}
-                            </div>
-                        </div>
+                        <h2 style="color:black;">INVOICE</h2>
+                        <p><b>Merchant:</b> {current_biz_name}<br><b>Date:</b> {o['date'].split('.')[0]}</p>
+                        <hr>
                         <p><b>Bill To:</b><br>{o['customer']}<br>{o.get('phone','')}<br>{o.get('address','')}</p>
                         <hr>
-                        {''.join([f"<div class='invoice-item'><span>{i['name']} (x{i['qty']})</span><span>Rs {i['price']*i['qty']}</span></div>" for i in o['items']])}
-                        <div class='invoice-item'><span>Delivery</span><span>Rs {o.get('delivery',0)}</span></div>
-                        <div class='invoice-total'>TOTAL: Rs {o['total']}</div>
+                        {''.join([f"<div style='display:flex; justify-content:space-between;'><span>{i['name']} (x{i['qty']})</span><span>Rs {i['price']*i['qty']}</span></div>" for i in o['items']])}
+                        <br>
+                        <div style="display:flex; justify-content:space-between;"><b>Delivery</b><span>Rs {o.get('delivery',0)}</span></div>
+                        <hr>
+                        <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:18px;"><span>TOTAL</span><span>Rs {o['total']}</span></div>
                     </div>
                     """
                     st.markdown(inv_html, unsafe_allow_html=True)
@@ -287,7 +320,6 @@ elif menu == "📦 Inventory":
         if products:
             p_names = [p['name'] for p in products]
             sel_p_name = st.selectbox("Select Product", p_names)
-            
             if sel_p_name:
                 p_obj = next(p for p in products if p['name'] == sel_p_name)
                 st.write(f"Current Stock: **{p_obj['stock']}**")
@@ -298,8 +330,8 @@ elif menu == "📦 Inventory":
                 if st.button("Update"):
                     new_stock = p_obj['stock'] + qty_change if action == "Add (+)" else p_obj['stock'] - qty_change
                     update_stock(p_obj['id'], new_stock)
-                    st.success(f"Updated! New Stock: {new_stock}")
-                    time.sleep(1)
+                    st.success("Updated!")
+                    time.sleep(0.5)
                     st.rerun()
         else: st.info("No products.")
 
