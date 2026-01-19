@@ -376,3 +376,33 @@ elif menu == "🚚 Order Manager":
                         st.success(f"Est. Profit: Rs {o.get('net_profit', 0)}")
     else:
         st.info("No active orders found.")
+
+
+
+# === USER MANAGEMENT (New Section) ===
+elif menu == "👥 User Management":
+    st.subheader("Customer Access Control 🔐")
+    
+    with st.form("create_user"):
+        st.write("### Create New Customer Login")
+        new_email = st.text_input("Customer Email (Username)")
+        new_pass = st.text_input("Assign Password", type="password")
+        # Link to existing customer data if needed
+        if st.form_submit_button("Create Account"):
+            if new_email and new_pass:
+                # Save to 'users' collection
+                db.collection("users").document(new_email).set({
+                    "password": new_pass,
+                    "created_at": firestore.SERVER_TIMESTAMP,
+                    "active": True
+                })
+                st.success(f"User Created: {new_email}")
+                st.info(f"Password: {new_pass}")
+            else:
+                st.error("Email aur Password dono zaroori hain!")
+
+    st.divider()
+    st.write("### Active Users")
+    users_ref = db.collection("users").stream()
+    for u in users_ref:
+        st.text(f"👤 {u.id}")
