@@ -3,4 +3,5 @@ pandas
 plotly
 pytz
 firebase-admin
-st-gsheets-connection
+st-gsheets-connection==0.0.3
+
