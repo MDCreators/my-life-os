@@ -1,6 +1,12 @@
 import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
+
+# 'gsheets' connection Secrets mein [connections.gsheets] dhoonde ga
+conn = st.connection("gsheets", type=GSheetsConnection)
+import streamlit as st
+import pandas as pd
+from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 import pytz
 
