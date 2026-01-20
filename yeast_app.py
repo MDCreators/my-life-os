@@ -3,31 +3,25 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 
-# --- 1. PAGE CONFIG ---
-st.set_page_config(page_title="Business Manager", layout="wide")
+import streamlit as st
+import pandas as pd
+from streamlit_gsheets import GSheetsConnection
 
-# 🚨 APNI SHEET KA LINK
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1qzkhlZvw7x1QOX9yCiUfS7h1M2_7UfxAb6tzr5dgExk/edit"
-
-# --- 2. CONNECTION (Zaroori Change) ---
-# Yahan hum explicitly 'connections.gsheets' section ko call kar rahay hain
+# --- CONNECTION ---
+# Hum 'gsheets' key use kar rahay hain jo Secrets mein hay
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data(worksheet_name):
-    try:
-        # Spreadsheet link dena lazmi hay
-        return conn.read(spreadsheet=SHEET_URL, worksheet=worksheet_name, ttl=0)
-    except Exception as e:
-        return pd.DataFrame()
+    # Ab spreadsheet URL dene ki zaroorat nahi kyun k wo Secrets mein hay
+    return conn.read(worksheet=worksheet_name, ttl=0)
 
 def update_data(worksheet_name, df):
     try:
-        # Sab se bara masla yahan hay, humein SHEET_URL dobara pass karna hota hay
-        conn.update(spreadsheet=SHEET_URL, worksheet=worksheet_name, data=df)
+        # Direct worksheet update karein, connection secrets se uthaye gi
+        conn.update(worksheet=worksheet_name, data=df)
         return True
     except Exception as e:
-        # Yeh error message humein bataye ga k masla kahan hay
-        st.error(f"Connection Error: {e}")
+        st.error(f"Asal Error Yeh Hay: {e}")
         return False
 
 # --- 3. LOGIN SYSTEM ---
