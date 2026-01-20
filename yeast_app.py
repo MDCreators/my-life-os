@@ -10,7 +10,6 @@ st.set_page_config(page_title="Dry Yeast Manager", layout="wide")
 pk_tz = pytz.timezone('Asia/Karachi')
 
 # --- 2. USERS & LOGIN SYSTEM ---
-# Aap ke bataye huay passwords
 USERS = {
     "dawoodmurtaza00@gmail.com": "admin123",
     "client1@gmail.com": "client500"
@@ -39,20 +38,19 @@ if not st.session_state["logged_in"]:
     login()
     st.stop()
 
-# --- 3. DIRECT CONNECTION (No Secrets File) ---
+# --- 3. DIRECT CONNECTION (Auto-Fix Key) ---
 def get_connection():
-    # Scopes define karna lazmi hai
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
     ]
     
-    # --- YOUR JSON KEY (HARDCODED) ---
+    # --- YOUR JSON KEY ---
     creds_dict = {
       "type": "service_account",
       "project_id": "life-os-d42f0",
       "private_key_id": "3c7d952e3096334b04b53356f5b52b1fd86e2f07",
-      "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCytOdCkjYRCLzw\ngo7/HzNcwtEBoZDVR3hAtpFSeNbgc8a8Stt0Fk3BN4Zv7HP9KLtVSNQtXnTz2hVm\nC7j8iuHtn8qth7iNF2nwg5wPKi23srGmO1ghfyPFYbQEzCyyJPuCNCfUOFVTE1bT\nwv0OpsrhdJcyT85w/R0Azy6T4h9WouhUS03jr9oA7LWi2IljgOCwC68lip2x0HXQ\nHEWFcdDGNyEeYLooNcs4/q9yWdkF2ZQDQp5msER4/RZhbbgD+5Zwze1vVP2Lm7Jb\nov/4YXuqFx1rDkkGG6k0Zq8XMiIuZAo+crCPoZAgH1Y7oRLmRvZq4eOJk7t2e2Yr\nvYTKjPhZAgMBAAECggEACUVpWgLL20Zgxvl/Aa1UtNNGlJcVNHtoubK/B1BNlYds\nIAiiKfuePQ/sYZIa0l9ymJIWr+PenWgLBChHiJKL9g/8K9SGtosoa9noFsFRbd5P\naRhbEiHOcUcIV9df2j4g7jhWeKQTiSPPtVzAVCpDDD9IOMv7IdF/17Ln77QjfBMR\nO139wC2DZwTY5g1afM3u7Ea6NfyQ0nE2sz/yzUvQeIFHFLLndzq8SEZoYk8aZrTO\n1Xx/DHyoyH/9ZwqIO+vp3I04sF+gJy/RIi9hTn1oEsNXwCZAkkC3zy/f/VCLDsL/\n1mF7BXMC1BcZe7NrU17inC41QYDV8pfUjHmoHnv0gQKBgQDs7A3Vh9A0zi6iW5jU\n/Z4xOqqUzhj87WzHBDn9NYzc8kcy41ZV1Szx9jw06xB39WOFTZH4tK+1llgWJzia\nLgjZzHaii0PaksLiyQahk21l983vqKVAGj586nvwRu8ENIeZQG/vKx7qlPbh4R4L\n8ny0XMSpsTv/HYPHoV0sOyPUlQKBgQDBGMm79dSIi981/xkdC4A4oOz2cqRQupk0\nyPlRjgp3av8FRbvFvrCkBuyX/WLs+aGcsTkKNtfNvnH1dT4013Fl3jxk+SAn4Vt/\nTxvN/XIVrwRSPXDPqOfcLtW5mpzW82GqttV5MNsr75sVksONXj11oGyg3oKLTHwz\nmZH+zIs/tQKBgDpSfbFT5pApNVeoXr4H1Npfi8Bn38TbmYyAYNoRRaTaS2aeihFF\nEfRaXkXUm9A76wzUpJtpt1tnMDX737YsoOckqwumZsS2nhz/yY8a4LJaRyq5BDz8\neOd9PZdPjuUlHUA/mY5xugGbPA8swJ3GSqaHs63mQFOz603ITkxmHpLlAoGBAKY8\n1ehIglmvuVG+NXuo3BFkkby2A7owexdTcjkBBQe8CKMcXsSmH2KHR4auMU18t+Kz\nPD0L7AwHygocjpplZA3kHrB7PXC39dKLY4+ag24hh6HZnVZZvorzkzI/5oizbUDQ\nOMYmBnozxJr1B/+bw2OR4hM4nMCZ709pBaSLqdIFAoGAd1dUxIUO/Ad3p472sqPX\nVAKre/0vFQYQWZWb3QXaowuzgwZ0yW3m3c4nbGz1APWg87EXUB0ikVHD7TM0Gyf6\nDFg8eqw56BJWuaUJ5AiTkIyKDAM1mK6G3Zq1q7gapxU4RHwH7f0qbYdCOa8PwwPK\nPqVIsUCDYbZaCG+eQnI6p0Q=\n-----END PRIVATE KEY-----\n",
+      "private_key": "-----BEGIN PRIVATE KEY-----\\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCytOdCkjYRCLzw\\ngo7/HzNcwtEBoZDVR3hAtpFSeNbgc8a8Stt0Fk3BN4Zv7HP9KLtVSNQtXnTz2hVm\\nC7j8iuHtn8qth7iNF2nwg5wPKi23srGmO1ghfyPFYbQEzCyyJPuCNCfUOFVTE1bT\\nwv0OpsrhdJcyT85w/R0Azy6T4h9WouhUS03jr9oA7LWi2IljgOCwC68lip2x0HXQ\\nHEWFcdDGNyEeYLooNcs4/q9yWdkF2ZQDQp5msER4/RZhbbgD+5Zwze1vVP2Lm7Jb\\nov/4YXuqFx1rDkkGG6k0Zq8XMiIuZAo+crCPoZAgH1Y7oRLmRvZq4eOJk7t2e2Yr\\nvYTKjPhZAgMBAAECggEACUVpWgLL20Zgxvl/Aa1UtNNGlJcVNHtoubK/B1BNlYds\\nIAiiKfuePQ/sYZIa0l9ymJIWr+PenWgLBChHiJKL9g/8K9SGtosoa9noFsFRbd5P\\naRhbEiHOcUcIV9df2j4g7jhWeKQTiSPPtVzAVCpDDD9IOMv7IdF/17Ln77QjfBMR\\nO139wC2DZwTY5g1afM3u7Ea6NfyQ0nE2sz/yzUvQeIFHFLLndzq8SEZoYk8aZrTO\\n1Xx/DHyoyH/9ZwqIO+vp3I04sF+gJy/RIi9hTn1oEsNXwCZAkkC3zy/f/VCLDsL/\\n1mF7BXMC1BcZe7NrU17inC41QYDV8pfUjHmoHnv0gQKBgQDs7A3Vh9A0zi6iW5jU\\n/Z4xOqqUzhj87WzHBDn9NYzc8kcy41ZV1Szx9jw06xB39WOFTZH4tK+1llgWJzia\\nLgjZzHaii0PaksLiyQahk21l983vqKVAGj586nvwRu8ENIeZQG/vKx7qlPbh4R4L\\n8ny0XMSpsTv/HYPHoV0sOyPUlQKBgQDBGMm79dSIi981/xkdC4A4oOz2cqRQupk0\\nyPlRjgp3av8FRbvFvrCkBuyX/WLs+aGcsTkKNtfNvnH1dT4013Fl3jxk+SAn4Vt/\\nTxvN/XIVrwRSPXDPqOfcLtW5mpzW82GqttV5MNsr75sVksONXj11oGyg3oKLTHwz\\nmZH+zIs/tQKBgDpSfbFT5pApNVeoXr4H1Npfi8Bn38TbmYyAYNoRRaTaS2aeihFF\\nEfRaXkXUm9A76wzUpJtpt1tnMDX737YsoOckqwumZsS2nhz/yY8a4LJaRyq5BDz8\\neOd9PZdPjuUlHUA/mY5xugGbPA8swJ3GSqaHs63mQFOz603ITkxmHpLlAoGBAKY8\\n1ehIglmvuVG+NXuo3BFkkby2A7owexdTcjkBBQe8CKMcXsSmH2KHR4auMU18t+Kz\\nPD0L7AwHygocjpplZA3kHrB7PXC39dKLY4+ag24hh6HZnVZZvorzkzI/5oizbUDQ\\nOMYmBnozxJr1B/+bw2OR4hM4nMCZ709pBaSLqdIFAoGAd1dUxIUO/Ad3p472sqPX\\nVAKre/0vFQYQWZWb3QXaowuzgwZ0yW3m3c4nbGz1APWg87EXUB0ikVHD7TM0Gyf6\\nDFg8eqw56BJWuaUJ5AiTkIyKDAM1mK6G3Zq1q7gapxU4RHwH7f0qbYdCOa8PwwPK\\nPqVIsUCDYbZaCG+eQnI6p0Q=\\n-----END PRIVATE KEY-----\\n",
       "client_email": "firebase-adminsdk-fbsvc@life-os-d42f0.iam.gserviceaccount.com",
       "client_id": "106111267269346632174",
       "auth_uri": "https://accounts.google.com/o/oauth2/auth",
@@ -60,12 +58,15 @@ def get_connection():
       "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
       "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40life-os-d42f0.iam.gserviceaccount.com"
     }
+
+    # 🔥 CRITICAL FIX: Replace text \n with actual newlines
+    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
     
-    # Authenticate directly
+    # Authenticate
     credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     client = gspread.authorize(credentials)
     
-    # Connect to the Sheet by URL
+    # Connect to the Sheet
     sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/14WmPIOtQSTjbx6zcOpGMHF2j27i_-hHkBI-9goLKV3c/edit")
     return sheet
 
@@ -102,7 +103,6 @@ if st.sidebar.button("Logout"):
     st.rerun()
 
 st.sidebar.title("🍞 Menu")
-# Tabs ke naam wohi rakhein jo Google Sheet mein hain
 menu = st.sidebar.radio("Go to:", ["Inventory", "Customers", "Sales", "Bank", "Expenses"])
 
 st.title(f"📂 {menu} Management")
@@ -119,7 +119,6 @@ if menu == "Inventory":
         with c3: price = st.number_input("Unit Price", 0)
         
         if st.form_submit_button("Save Stock"):
-            # Columns: Username (Item), Password (Qty), Shop Name (Price) -> Sheet format
             if save_data("Inventory", [item, qty, price, str(datetime.now(pk_tz))]):
                 st.success("✅ Stock Updated!")
                 st.rerun()
@@ -139,7 +138,6 @@ elif menu == "Customers":
 
 # --- C. SALES ---
 elif menu == "Sales":
-    # Customer List for Dropdown
     cust_df = get_data("Customers")
     cust_list = cust_df["Username"].tolist() if not cust_df.empty and "Username" in cust_df.columns else []
     
@@ -149,13 +147,11 @@ elif menu == "Sales":
             c_name = st.selectbox("Select Customer", cust_list)
         else:
             c_name = st.text_input("Customer Name")
-            
         amount = st.number_input("Total Amount", 0)
         paid = st.number_input("Cash Received", 0)
         note = st.text_input("Note / Items")
         
         if st.form_submit_button("Generate Bill"):
-            # Columns: Username (Customer), Password (Amount), Shop Name (Paid)
             if save_data("Sales", [c_name, amount, paid, note, str(datetime.now(pk_tz))]):
                 st.success("✅ Bill Saved!")
 
