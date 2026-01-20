@@ -6,5 +6,3 @@ firebase-admin
 st-gsheets-connection
 gspread
 google-auth
-
-
