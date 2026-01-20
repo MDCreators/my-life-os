@@ -17,28 +17,31 @@ USERS = {
 
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
+if "user_email" not in st.session_state:
+    st.session_state["user_email"] = ""
 
 def login():
     st.title("🔐 Secure Login")
     with st.form("login_form"):
-        email = st.text_input("Email")
+        email = st.text_input("Email Address")
         password = st.text_input("Password", type="password")
         if st.form_submit_button("Login"):
             if email in USERS and USERS[email] == password:
                 st.session_state["logged_in"] = True
                 st.session_state["user_email"] = email
+                st.success("Login Successful!")
                 st.rerun()
             else:
-                st.error("❌ Invalid Credentials")
+                st.error("❌ Ghalat Email ya Password!")
 
 if not st.session_state["logged_in"]:
     login(); st.stop()
 
-# --- 3. CONNECTION WITH DIAGNOSTICS ---
+# --- 3. CONNECTION (CORRECT ID) ---
 def get_connection():
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     
-    # 🔥 YOUR NEW KEY
+    # YOUR NEW KEY
     raw_key = """-----BEGIN PRIVATE KEY-----
 MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDnsArBr1SbGOLR
 wZqkGBhfpKywZMe6HU9wGXGeLJhPmLTY/qN7OouK0Mdp60SWcbqhDh5UUA74RVhm
@@ -84,41 +87,28 @@ NUYEnGUT+Iu/we6Mo4Qh4Q==
     credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     client = gspread.authorize(credentials)
     
-    # 🕵️ DIAGNOSTIC BLOCK (Yeh check karay ga ke Robot ko kya nazar aa raha hai)
-    try:
-        # Hum seedha URL se open kar rahay hain (ID copy paste error se bachnay ke liye)
-        sheet_url = "https://docs.google.com/spreadsheets/d/14WmPIOtQSTjbx6zcOpGMHF2j27i_-hHkBI-9goLKV3c/edit"
-        sheet = client.open_by_url(sheet_url)
-        return sheet
-    except Exception as e:
-        st.error(f"❌ Connection Failed! Error: {e}")
-        st.warning("🔍 Robot is checking available sheets...")
-        try:
-            available_sheets = client.openall()
-            if not available_sheets:
-                st.error("⚠️ Robot ko KOI bhi sheet nazar nahi aa rahi! Please 'Copy of client yeast' ko 'Unshare' kar ke dobara 'Share' karein.")
-            else:
-                st.success("✅ Robot ko ye sheets nazar aa rahi hain (Check karein aap ki sheet in mein hai?):")
-                for s in available_sheets:
-                    st.write(f"- {s.title} (ID: {s.id})")
-        except Exception as e2:
-            st.error(f"⚠️ Robot list bhi check nahi kar saka: {e2}")
-        st.stop()
-        return None
+    # 🔥 CORRECT SHEET ID (Dhoond li gayi ID)
+    # Pehlay 'PIOt' (Capital I) tha, ab 'PlOt' (Small L) hay.
+    sheet_id = "14WmPlOtQSTjbx6zcOpGMHF2j27i_-hHkBI-9goLKV3c"
+    
+    return client.open_by_key(sheet_id)
 
-# --- 4. DATA FUNCTIONS ---
+# --- 4. DATA LOGIC ---
 def get_data(tab_name):
-    sh = get_connection()
     try:
+        sh = get_connection()
         worksheet = sh.worksheet(tab_name)
         return pd.DataFrame(worksheet.get_all_records())
     except gspread.exceptions.WorksheetNotFound:
         st.error(f"⚠️ Tab '{tab_name}' nahi mila! Sheet mein tabs ke naam check karein.")
         return pd.DataFrame()
+    except Exception as e:
+        st.error(f"❌ Error: {e}")
+        return pd.DataFrame()
 
 def save_data(tab_name, row_data):
-    sh = get_connection()
     try:
+        sh = get_connection()
         worksheet = sh.worksheet(tab_name)
         worksheet.append_row(row_data)
         return True
@@ -128,8 +118,11 @@ def save_data(tab_name, row_data):
 
 # --- 5. INTERFACE ---
 st.sidebar.title(f"👤 {st.session_state['user_email']}")
-if st.sidebar.button("Logout"): st.session_state["logged_in"] = False; st.rerun()
+if st.sidebar.button("Logout"):
+    st.session_state["logged_in"] = False
+    st.rerun()
 
+st.sidebar.title("🍞 Menu")
 menu = st.sidebar.radio("Go to:", ["Inventory", "Customers", "Sales", "Bank", "Expenses"])
 st.title(f"📂 {menu} Management")
 
@@ -138,58 +131,70 @@ if menu == "Inventory":
     df = get_data("Inventory")
     st.dataframe(df, use_container_width=True)
     with st.form("inv"):
+        st.subheader("Add Stock")
         c1, c2, c3 = st.columns(3)
         with c1: i = st.text_input("Item Name")
-        with c2: q = st.number_input("Qty", 0)
-        with c3: p = st.number_input("Price", 0)
+        with c2: q = st.number_input("Quantity", 0)
+        with c3: p = st.number_input("Unit Price", 0)
         if st.form_submit_button("Save Stock"):
             if save_data("Inventory", [i, q, p, str(datetime.now(pk_tz))]):
-                st.success("✅ Saved!"); st.rerun()
+                st.success("✅ Stock Updated!")
+                st.rerun()
 
 # B. CUSTOMERS
 elif menu == "Customers":
     df = get_data("Customers")
     st.dataframe(df, use_container_width=True)
     with st.form("cus"):
-        n = st.text_input("Name")
+        st.subheader("New Customer")
+        n = st.text_input("Customer Name")
         b = st.number_input("Opening Balance", 0)
         if st.form_submit_button("Add Customer"):
             if save_data("Customers", [n, b, "Active", str(datetime.now(pk_tz))]):
-                st.success("✅ Saved!"); st.rerun()
+                st.success("✅ Customer Added!")
+                st.rerun()
 
 # C. SALES
 elif menu == "Sales":
     d = get_data("Customers")
     cl = d["Username"].tolist() if not d.empty and "Username" in d.columns else []
+    
+    st.subheader("New Invoice")
     with st.form("sal"):
         c = st.selectbox("Customer", cl) if cl else st.text_input("Customer Name")
-        a = st.number_input("Amount", 0)
-        p = st.number_input("Paid", 0)
-        n = st.text_input("Items")
+        c1, c2 = st.columns(2)
+        with c1: a = st.number_input("Total Amount", 0)
+        with c2: p = st.number_input("Cash Received", 0)
+        n = st.text_input("Items / Note")
+        
         if st.form_submit_button("Generate Bill"):
             if save_data("Sales", [c, a, p, n, str(datetime.now(pk_tz))]):
-                st.success("✅ Saved!")
+                st.success("✅ Bill Saved!")
 
 # D. BANK
 elif menu == "Bank":
     df = get_data("Bank")
     st.dataframe(df, use_container_width=True)
     with st.form("bnk"):
+        st.subheader("Bank Transaction")
         d = st.text_input("Detail")
         a = st.number_input("Amount", 0)
         t = st.selectbox("Type", ["Deposit", "Withdrawal"])
-        if st.form_submit_button("Log"):
+        if st.form_submit_button("Log Transaction"):
             if save_data("Bank", [d, a, t, str(datetime.now(pk_tz))]):
-                st.success("✅ Saved!"); st.rerun()
+                st.success("✅ Saved!")
+                st.rerun()
 
 # E. EXPENSES
 elif menu == "Expenses":
     df = get_data("Expenses")
     st.dataframe(df, use_container_width=True)
     with st.form("exp"):
+        st.subheader("New Expense")
         t = st.text_input("Title")
         a = st.number_input("Amount", 0)
         c = st.text_input("Category")
-        if st.form_submit_button("Add"):
+        if st.form_submit_button("Add Expense"):
             if save_data("Expenses", [t, a, c, str(datetime.now(pk_tz))]):
-                st.success("✅ Saved!"); st.rerun()
+                st.success("✅ Expense Recorded!")
+                st.rerun()
