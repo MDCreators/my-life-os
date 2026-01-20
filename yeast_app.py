@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import gspread
+import json
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 import pytz
@@ -38,48 +39,21 @@ if not st.session_state["logged_in"]:
     login()
     st.stop()
 
-# --- 3. CONNECTION (FIXED KEY) ---
+# --- 3. CONNECTION (JSON FIX METHOD) ---
 def get_connection():
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
     ]
     
-    # 🔥 KEY KO ASAL HALAT MEIN LIKHA HAI (NO \n CONFUSION)
-    fixed_private_key = """-----BEGIN PRIVATE KEY-----
-MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCytOdCkjYRCLzw
-go7/HzNcwtEBoZDVR3hAtpFSeNbgc8a8Stt0Fk3BN4Zv7HP9KLtVSNQtXnTz2hVm
-C7j8iuHtn8qth7iNF2nwg5wPKi23srGmO1ghfyPFYbQEzCyyJPuCNCfUOFVTE1bT
-wv0OpsrhdJcyT85w/R0Azy6T4h9WouhUS03jr9oA7LWi2IljgOCwC68lip2x0HXQ
-HEWFcdDGNyEeYLooNcs4/q9yWdkF2ZQDQp5msER4/RZhbbgD+5Zwze1vVP2Lm7Jb
-ov/4YXuqFx1rDkkGG6k0Zq8XMiIuZAo+crCPoZAgH1Y7oRLmRvZq4eOJk7t2e2Yr
-vYTKjPhZAgMBAAECggEACUVpWgLL20Zgxvl/Aa1UtNNGlJcVNHtoubK/B1BNlYds
-IAiiKfuePQ/sYZIa0l9ymJIWr+PenWgLBChHiJKL9g/8K9SGtosoa9noFsFRbd5P
-aRhbEiHOcUcIV9df2j4g7jhWeKQTiSPPtVzAVCpDDD9IOMv7IdF/17Ln77QjfBMR
-O139wC2DZwTY5g1afM3u7Ea6NfyQ0nE2sz/yzUvQeIFHFLLndzq8SEZoYk8aZrTO
-1Xx/DHyoyH/9ZwqIO+vp3I04sF+gJy/RIi9hTn1oEsNXwCZAkkC3zy/f/VCLDsL/
-1mF7BXMC1BcZe7NrU17inC41QYDV8pfUjHmoHnv0gQKBgQDs7A3Vh9A0zi6iW5jU
-/Z4xOqqUzhj87WzHBDn9NYzc8kcy41ZV1Szx9jw06xB39WOFTZH4tK+1llgWJzia
-LgjZzHaii0PaksLiyQahk21l983vqKVAGj586nvwRu8ENIeZQG/vKx7qlPbh4R4L
-8ny0XMSpsTv/HYPHoV0sOyPUlQKBgQDBGMm79dSIi981/xkdC4A4oOz2cqRQupk0
-yPlRjgp3av8FRbvFvrCkBuyX/WLs+aGcsTkKNtfNvnH1dT4013Fl3jxk+SAn4Vt/
-TxvN/XIVrwRSPXDPqOfcLtW5mpzW82GqttV5MNsr75sVksONXj11oGyg3oKLTHwz
-mZH+zIs/tQKBgDpSfbFT5pApNVeoXr4H1Npfi8Bn38TbmYyAYNoRRaTaS2aeihFF
-EfRaXkXUm9A76wzUpJtpt1tnMDX737YsoOckqwumZsS2nhz/yY8a4LJaRyq5BDz8
-eOd9PZdPjuUlHUA/mY5xugGbPA8swJ3GSqaHs63mQFOz603ITkxmHpLlAoGBAKY8
-1ehIglmvuVG+NXuo3BFkkby2A7owexdTcjkBBQe8CKMcXsSmH2KHR4auMU18t+Kz
-PD0L7AwHygocjpplZA3kHrB7PXC39dKLY4+ag24hh6HZnVZZvorzkzI/5oizbUDQ
-OMYmBnozxJr1B/+bw2OR4hM4nMCZ709pBaSLqdIFAoGAd1dUxIUO/Ad3p472sqPX
-VAKre/0vFQYQWZWb3QXaowuzgwZ0yW3m3c4nbGz1APWg87EXUB0ikVHD7TM0Gyf6
-DFg8eqw56BJWuaUJ5AiTkIyKDAM1mK6G3Zq1q7gapxU4RHwH7f0qbYdCOa8PwwPK
-PqVIsUCDYbZaCG+eQnI6p0Q=
------END PRIVATE KEY-----"""
-
-    creds_dict = {
+    # 🔥 YAHAN HUM AAP KI JSON KO RAW TEXT KE TOR PAR DAL RAHAY HAIN
+    # JSON library isay khud theek kar le gi.
+    raw_json_data = """
+    {
       "type": "service_account",
       "project_id": "life-os-d42f0",
       "private_key_id": "3c7d952e3096334b04b53356f5b52b1fd86e2f07",
-      "private_key": fixed_private_key, # Yahan hum ne fixed key use ki hai
+      "private_key": "-----BEGIN PRIVATE KEY-----\\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCytOdCkjYRCLzw\\ngo7/HzNcwtEBoZDVR3hAtpFSeNbgc8a8Stt0Fk3BN4Zv7HP9KLtVSNQtXnTz2hVm\\nC7j8iuHtn8qth7iNF2nwg5wPKi23srGmO1ghfyPFYbQEzCyyJPuCNCfUOFVTE1bT\\nwv0OpsrhdJcyT85w/R0Azy6T4h9WouhUS03jr9oA7LWi2IljgOCwC68lip2x0HXQ\\nHEWFcdDGNyEeYLooNcs4/q9yWdkF2ZQDQp5msER4/RZhbbgD+5Zwze1vVP2Lm7Jb\\nov/4YXuqFx1rDkkGG6k0Zq8XMiIuZAo+crCPoZAgH1Y7oRLmRvZq4eOJk7t2e2Yr\\nvYTKjPhZAgMBAAECggEACUVpWgLL20Zgxvl/Aa1UtNNGlJcVNHtoubK/B1BNlYds\\nIAiiKfuePQ/sYZIa0l9ymJIWr+PenWgLBChHiJKL9g/8K9SGtosoa9noFsFRbd5P\\naRhbEiHOcUcIV9df2j4g7jhWeKQTiSPPtVzAVCpDDD9IOMv7IdF/17Ln77QjfBMR\\nO139wC2DZwTY5g1afM3u7Ea6NfyQ0nE2sz/yzUvQeIFHFLLndzq8SEZoYk8aZrTO\\n1Xx/DHyoyH/9ZwqIO+vp3I04sF+gJy/RIi9hTn1oEsNXwCZAkkC3zy/f/VCLDsL/\\n1mF7BXMC1BcZe7NrU17inC41QYDV8pfUjHmoHnv0gQKBgQDs7A3Vh9A0zi6iW5jU\\n/Z4xOqqUzhj87WzHBDn9NYzc8kcy41ZV1Szx9jw06xB39WOFTZH4tK+1llgWJzia\\nLgjZzHaii0PaksLiyQahk21l983vqKVAGj586nvwRu8ENIeZQG/vKx7qlPbh4R4L\\n8ny0XMSpsTv/HYPHoV0sOyPUlQKBgQDBGMm79dSIi981/xkdC4A4oOz2cqRQupk0\\nyPlRjgp3av8FRbvFvrCkBuyX/WLs+aGcsTkKNtfNvnH1dT4013Fl3jxk+SAn4Vt/\\nTxvN/XIVrwRSPXDPqOfcLtW5mpzW82GqttV5MNsr75sVksONXj11oGyg3oKLTHwz\\nmZH+zIs/tQKBgDpSfbFT5pApNVeoXr4H1Npfi8Bn38TbmYyAYNoRRaTaS2aeihFF\\nEfRaXkXUm9A76wzUpJtpt1tnMDX737YsoOckqwumZsS2nhz/yY8a4LJaRyq5BDz8\\neOd9PZdPjuUlHUA/mY5xugGbPA8swJ3GSqaHs63mQFOz603ITkxmHpLlAoGBAKY8\\n1ehIglmvuVG+NXuo3BFkkby2A7owexdTcjkBBQe8CKMcXsSmH2KHR4auMU18t+Kz\\nPD0L7AwHygocjpplZA3kHrB7PXC39dKLY4+ag24hh6HZnVZZvorzkzI/5oizbUDQ\\nOMYmBnozxJr1B/+bw2OR4hM4nMCZ709pBaSLqdIFAoGAd1dUxIUO/Ad3p472sqPX\\nVAKre/0vFQYQWZWb3QXaowuzgwZ0yW3m3c4nbGz1APWg87EXUB0ikVHD7TM0Gyf6\\nDFg8eqw56BJWuaUJ5AiTkIyKDAM1mK6G3Zq1q7gapxU4RHwH7f0qbYdCOa8PwwPK\\nPqVIsUCDYbZaCG+eQnI6p0Q=\\n-----END PRIVATE KEY-----\\n",
       "client_email": "firebase-adminsdk-fbsvc@life-os-d42f0.iam.gserviceaccount.com",
       "client_id": "106111267269346632174",
       "auth_uri": "https://accounts.google.com/o/oauth2/auth",
@@ -87,12 +61,15 @@ PqVIsUCDYbZaCG+eQnI6p0Q=
       "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
       "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40life-os-d42f0.iam.gserviceaccount.com"
     }
+    """
     
-    # Authenticate
+    # Parse the string into a real dictionary
+    creds_dict = json.loads(raw_json_data)
+
     credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     client = gspread.authorize(credentials)
     
-    # Connect
+    # Connect to the Sheet
     sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/14WmPIOtQSTjbx6zcOpGMHF2j27i_-hHkBI-9goLKV3c/edit")
     return sheet
 
@@ -103,7 +80,7 @@ def get_data(tab_name):
         try:
             worksheet = sh.worksheet(tab_name)
         except gspread.exceptions.WorksheetNotFound:
-            st.error(f"⚠️ Error: Tab '{tab_name}' nahi mila.")
+            st.error(f"⚠️ Error: Tab '{tab_name}' sheet mein nahi mila.")
             return pd.DataFrame()
         return pd.DataFrame(worksheet.get_all_records())
     except Exception as e:
