@@ -1,8 +1,5 @@
 streamlit
 pandas
-plotly
-pytz
-firebase-admin
-st-gsheets-connection
 gspread
 google-auth
+pytz
