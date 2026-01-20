@@ -17,27 +17,24 @@ USERS = {
 
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
-if "user_email" not in st.session_state:
-    st.session_state["user_email"] = ""
 
 def login():
     st.title("🔐 Secure Login")
     with st.form("login_form"):
-        email = st.text_input("Email Address")
+        email = st.text_input("Email")
         password = st.text_input("Password", type="password")
         if st.form_submit_button("Login"):
             if email in USERS and USERS[email] == password:
                 st.session_state["logged_in"] = True
                 st.session_state["user_email"] = email
-                st.success("Login Successful!")
                 st.rerun()
             else:
-                st.error("❌ Ghalat Email ya Password!")
+                st.error("❌ Invalid Credentials")
 
 if not st.session_state["logged_in"]:
     login(); st.stop()
 
-# --- 3. CONNECTION (CORRECT ID) ---
+# --- 3. CONNECTION (OPEN BY NAME - NO ID ERROR) ---
 def get_connection():
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     
@@ -87,11 +84,10 @@ NUYEnGUT+Iu/we6Mo4Qh4Q==
     credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     client = gspread.authorize(credentials)
     
-    # 🔥 CORRECT SHEET ID (Dhoond li gayi ID)
-    # Pehlay 'PIOt' (Capital I) tha, ab 'PlOt' (Small L) hay.
-    sheet_id = "14WmPlOtQSTjbx6zcOpGMHF2j27i_-hHkBI-9goLKV3c"
-    
-    return client.open_by_key(sheet_id)
+    # 🔥 OPEN BY NAME (ID ka masla khatam)
+    # Robot ko sheet "Copy of client yeast" nazar aa rahi hay (Confirmed in screenshot)
+    sheet = client.open("Copy of client yeast")
+    return sheet
 
 # --- 4. DATA LOGIC ---
 def get_data(tab_name):
@@ -99,9 +95,6 @@ def get_data(tab_name):
         sh = get_connection()
         worksheet = sh.worksheet(tab_name)
         return pd.DataFrame(worksheet.get_all_records())
-    except gspread.exceptions.WorksheetNotFound:
-        st.error(f"⚠️ Tab '{tab_name}' nahi mila! Sheet mein tabs ke naam check karein.")
-        return pd.DataFrame()
     except Exception as e:
         st.error(f"❌ Error: {e}")
         return pd.DataFrame()
@@ -117,7 +110,7 @@ def save_data(tab_name, row_data):
         return False
 
 # --- 5. INTERFACE ---
-st.sidebar.title(f"👤 {st.session_state['user_email']}")
+st.sidebar.title(f"👤 {st.session_state.get('user_email', 'User')}")
 if st.sidebar.button("Logout"):
     st.session_state["logged_in"] = False
     st.rerun()
@@ -158,15 +151,13 @@ elif menu == "Customers":
 elif menu == "Sales":
     d = get_data("Customers")
     cl = d["Username"].tolist() if not d.empty and "Username" in d.columns else []
-    
-    st.subheader("New Invoice")
     with st.form("sal"):
+        st.subheader("New Invoice")
         c = st.selectbox("Customer", cl) if cl else st.text_input("Customer Name")
         c1, c2 = st.columns(2)
         with c1: a = st.number_input("Total Amount", 0)
         with c2: p = st.number_input("Cash Received", 0)
         n = st.text_input("Items / Note")
-        
         if st.form_submit_button("Generate Bill"):
             if save_data("Sales", [c, a, p, n, str(datetime.now(pk_tz))]):
                 st.success("✅ Bill Saved!")
