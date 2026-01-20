@@ -59,8 +59,9 @@ st.title(f"Section: {menu}")
 # --- 5. FEATURES LOGIC ---
 
 # STOCK MANAGEMENT
+# Code mein jahan bhi "Stock" likha tha, usay "Inventory" kar dein
 if menu == "📦 Stock":
-    df = get_data("Stock")
+    df = get_data("Inventory") # Sheet ke mutabiq name update
     st.dataframe(df, use_container_width=True)
     with st.expander("Update Inventory"):
         with st.form("stock"):
