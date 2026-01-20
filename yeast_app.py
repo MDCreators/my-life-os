@@ -3,30 +3,31 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 
-# --- 1. PAGE CONFIGURATION ---
+# --- 1. PAGE CONFIG ---
 st.set_page_config(page_title="Business Manager", layout="wide")
 
-# 🚨 APNI GOOGLE SHEET KA LINK NEECHAY HAI
+# 🚨 APNI SHEET KA LINK
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1qzkhlZvw7x1QOX9yCiUfS7h1M2_7UfxAb6tzr5dgExk/edit"
 
-# --- 2. CONNECTION SETUP ---
-# Hum explicitly 'gsheets' connection ko Secrets se link kar rahay hain
+# --- 2. CONNECTION (Zaroori Change) ---
+# Yahan hum explicitly 'connections.gsheets' section ko call kar rahay hain
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data(worksheet_name):
     try:
-        # Spreadsheet aur Worksheet dono ka batana zaroori hai
+        # Spreadsheet link dena lazmi hay
         return conn.read(spreadsheet=SHEET_URL, worksheet=worksheet_name, ttl=0)
     except Exception as e:
         return pd.DataFrame()
 
 def update_data(worksheet_name, df):
     try:
-        # 'spreadsheet' link pass karna lazmi hai warna 'Public Spreadsheet' error ata hai
+        # Sab se bara masla yahan hay, humein SHEET_URL dobara pass karna hota hay
         conn.update(spreadsheet=SHEET_URL, worksheet=worksheet_name, data=df)
         return True
     except Exception as e:
-        st.error(f"❌ Connection Error: {e}")
+        # Yeh error message humein bataye ga k masla kahan hay
+        st.error(f"Connection Error: {e}")
         return False
 
 # --- 3. LOGIN SYSTEM ---
