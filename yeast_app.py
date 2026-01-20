@@ -3,177 +3,218 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 
-# --- 1. PAGE CONFIG (Sab se pehlay) ---
-st.set_page_config(page_title="Yeast Shop Manager", layout="wide")
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="Business Manager", layout="wide")
 
-# --- 2. AUTHENTICATION (Login System) ---
-def check_login():
-    if "logged_in" not in st.session_state:
-        st.session_state["logged_in"] = False
-        st.session_state["role"] = None
-
-    if not st.session_state["logged_in"]:
-        st.header("🔒 Login Required")
-        
-        # Login Form
-        col1, col2 = st.columns([1, 2])
-        with col1:
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
-            btn = st.button("Login")
-
-        if btn:
-            # --- USER LIST (Yahan naye users add kar saktay hain) ---
-            users = {
-                "admin": "admin123",  # Malik (Full Access)
-                "staff": "staff123",  # Worker (Limited Access)
-            }
-
-            if username in users and users[username] == password:
-                st.session_state["logged_in"] = True
-                # Role assign karein (Admin ya Staff)
-                st.session_state["role"] = "admin" if username == "admin" else "staff"
-                st.success("Login Successful!")
-                st.rerun()
-            else:
-                st.error("❌ Wrong Username or Password")
-        return False
-    return True
-
-# Agar login nahi hai to yahi rook do
-if not check_login():
-    st.stop()
-
-# --- 3. LOGOUT BUTTON & ROLE ---
-st.sidebar.info(f"👤 Logged in as: {st.session_state['role'].upper()}")
-if st.sidebar.button("Logout"):
-    st.session_state["logged_in"] = False
-    st.rerun()
-
-# --- 4. GOOGLE SHEET CONNECTION ---
-# Secrets wahi puranay walay use hon ge
+# --- GOOGLE SHEET CONNECTION ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
+# --- HELPER FUNCTIONS ---
 def get_data(worksheet):
     try:
-        return conn.read(worksheet=worksheet, ttl=0)
+        df = conn.read(worksheet=worksheet, ttl=0)
+        return df
     except:
-        return pd.DataFrame() # Agar sheet khali ho to error na aye
+        return pd.DataFrame()
 
 def update_data(worksheet, df):
     conn.update(worksheet=worksheet, data=df)
 
-# --- 5. MENU SELECTION (Based on Role) ---
-st.title("🍞 Dry Yeast Business System")
+# --- 1. LOGIN SYSTEM ---
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+    st.session_state["username"] = None
+    st.session_state["shop_name"] = None
+    st.session_state["role"] = None
 
+if not st.session_state["logged_in"]:
+    st.title("🔐 Secure Login")
+    
+    with st.form("login_form"):
+        user = st.text_input("Username")
+        pwd = st.text_input("Password", type="password")
+        btn = st.form_submit_button("Login")
+        
+        if btn:
+            # Admin Hardcoded (Safety k liye)
+            if user == "admin" and pwd == "admin123":
+                st.session_state["logged_in"] = True
+                st.session_state["username"] = "admin"
+                st.session_state["role"] = "admin"
+                st.session_state["shop_name"] = "Super Admin"
+                st.success("Welcome Admin!")
+                st.rerun()
+            
+            # Check Users from Google Sheet
+            df_users = get_data("Users")
+            if not df_users.empty:
+                # Find user
+                match = df_users[(df_users["Username"] == user) & (df_users["Password"] == pwd)]
+                if not match.empty:
+                    st.session_state["logged_in"] = True
+                    st.session_state["username"] = user
+                    st.session_state["role"] = "user"
+                    st.session_state["shop_name"] = match.iloc[0]["Shop Name"]
+                    st.success(f"Welcome to {match.iloc[0]['Shop Name']}!")
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid Username or Password")
+            else:
+                st.error("❌ User Database Empty or Not Connected")
+
+    st.stop()  # Stop app here if not logged in
+
+# --- 2. SIDEBAR & LOGOUT ---
+owner_id = st.session_state["username"] # Current User
+shop_title = st.session_state["shop_name"]
+
+st.sidebar.title(f"🏪 {shop_title}")
+st.sidebar.caption(f"Logged in as: {owner_id}")
+
+if st.sidebar.button("Logout"):
+    st.session_state["logged_in"] = False
+    st.rerun()
+
+# --- 3. MENU ---
 if st.session_state["role"] == "admin":
-    # Admin ko sab nazar aye ga
-    menu = st.sidebar.radio("Menu", ["🛒 New Bill", "📦 Inventory", "👥 Customers", "💸 Expenses", "🏦 Bank/Cash", "🛠️ Admin Users"])
+    menu = st.sidebar.radio("Admin Menu", ["🛠️ Create New Shop/User", "👀 View All Data"])
 else:
-    # Staff ko sirf Billing nazar aye gi
-    menu = st.sidebar.radio("Menu", ["🛒 New Bill", "👥 Customers"])
+    menu = st.sidebar.radio("Menu", ["🛒 New Bill", "📦 Inventory", "👥 Customers", "💸 Expenses", "🏦 Bank/Cash"])
+
+st.title(f"{shop_title} Dashboard")
 
 # ==========================
-# A. INVENTORY (STOCK)
+# ADMIN PANEL (Create Users)
 # ==========================
-if menu == "📦 Inventory":
-    st.header("📦 Stock Management")
-    df = get_data("Inventory")
-    st.dataframe(df, use_container_width=True)
+if st.session_state["role"] == "admin":
+    if menu == "🛠️ Create New Shop/User":
+        st.header("🛠️ Create New Client Account")
+        with st.form("new_user"):
+            new_user = st.text_input("New Username (e.g. shop1)")
+            new_pass = st.text_input("New Password")
+            new_shop = st.text_input("Shop Name (e.g. Bismillah General Store)")
+            if st.form_submit_button("Create User"):
+                df_users = get_data("Users")
+                # Check duplicate
+                if not df_users.empty and new_user in df_users["Username"].values:
+                    st.error("Username already exists!")
+                else:
+                    new_row = pd.DataFrame([{"Username": new_user, "Password": new_pass, "Shop Name": new_shop}])
+                    update_data("Users", pd.concat([df_users, new_row], ignore_index=True))
+                    st.success(f"User '{new_user}' Created Successfully!")
 
-    with st.expander("Add New Stock"):
-        with st.form("stock_form"):
-            name = st.text_input("Item Name")
-            qty = st.number_input("Quantity", 0)
-            price = st.number_input("Price Per Unit", 0)
-            if st.form_submit_button("Add Item"):
-                new_row = pd.DataFrame([{"Item Name": name, "Quantity": qty, "Price": price}])
-                update_data("Inventory", pd.concat([df, new_row], ignore_index=True))
-                st.success("Added!")
+    elif menu == "👀 View All Data":
+        st.write("Admin can see Master Data here...")
+        st.dataframe(get_data("Users"))
+
+# ==========================
+# USER PANEL (Shopkeeper)
+# ==========================
+else:
+    # --- AUTO FILTER FUNCTION (Magic Logic) ---
+    # Yeh function sirf wohi data laye ga jo 'Owner' column mai match karay ga
+    def get_my_data(sheet_name):
+        df = get_data(sheet_name)
+        if not df.empty and "Owner" in df.columns:
+            return df[df["Owner"] == owner_id]
+        return pd.DataFrame()
+
+    # ==========================
+    # A. INVENTORY
+    # ==========================
+    if menu == "📦 Inventory":
+        st.header("📦 My Stock")
+        df_stock = get_my_data("Inventory")
+        st.dataframe(df_stock.drop(columns=["Owner"], errors="ignore"), use_container_width=True)
+
+        with st.expander("Add New Item"):
+            with st.form("add_item"):
+                name = st.text_input("Item Name")
+                qty = st.number_input("Quantity", 0)
+                price = st.number_input("Price", 0)
+                unit = st.selectbox("Unit", ["Pkt", "Kg", "Ctn", "Pcs"])
+                if st.form_submit_button("Add Stock"):
+                    # Load FULL data first to append
+                    df_full = get_data("Inventory")
+                    new_row = pd.DataFrame([{
+                        "Owner": owner_id,  # <--- Important: Tagging owner
+                        "Item Name": name, 
+                        "Quantity": qty, 
+                        "Price": price,
+                        "Unit": unit
+                    }])
+                    update_data("Inventory", pd.concat([df_full, new_row], ignore_index=True))
+                    st.success("Item Added!")
+                    st.rerun()
+
+    # ==========================
+    # B. BILLING
+    # ==========================
+    elif menu == "🛒 New Bill":
+        st.header("🧾 New Sale")
+        df_stock = get_my_data("Inventory")
+        
+        with st.form("bill_form"):
+            c1, c2 = st.columns(2)
+            cust = c1.text_input("Customer Name")
+            date = c2.date_input("Date", datetime.today())
+            
+            # Select only MY items
+            items_list = df_stock["Item Name"].tolist() if not df_stock.empty else []
+            item = st.selectbox("Select Item", items_list)
+            qty = st.number_input("Quantity", 1)
+            
+            price = 0
+            if item and not df_stock.empty:
+                row = df_stock[df_stock["Item Name"] == item]
+                if not row.empty:
+                    price = row.iloc[0]["Price"] * qty
+                    st.info(f"Total: {price}")
+            
+            paid = st.number_input("Paid Amount", 0)
+            if st.form_submit_button("Save Bill"):
+                udhaar = price - paid
+                df_sales_full = get_data("Sales")
+                new_sale = pd.DataFrame([{
+                    "Owner": owner_id,
+                    "Date": str(date), "Customer": cust, "Item": item, 
+                    "Qty": qty, "Total": price, "Paid": paid, "Udhaar": udhaar
+                }])
+                update_data("Sales", pd.concat([df_sales_full, new_sale], ignore_index=True))
+                st.success("Bill Saved!")
+
+    # ==========================
+    # C. CUSTOMERS
+    # ==========================
+    elif menu == "👥 Customers":
+        st.header("👥 My Customers")
+        df_sales = get_my_data("Sales")
+        if not df_sales.empty:
+            # Calculate Udhaar for this shop only
+            khata = df_sales.groupby("Customer")[["Total", "Paid", "Udhaar"]].sum().reset_index()
+            st.dataframe(khata, use_container_width=True)
+        else:
+            st.info("No sales yet.")
+
+    # ==========================
+    # D. EXPENSES & BANK
+    # ==========================
+    elif menu == "💸 Expenses":
+        st.header("💸 My Expenses")
+        df_exp = get_my_data("Expenses")
+        st.dataframe(df_exp.drop(columns=["Owner"], errors="ignore"), use_container_width=True)
+        with st.form("exp"):
+            desc = st.text_input("Description")
+            amt = st.number_input("Amount", 0)
+            if st.form_submit_button("Add"):
+                df_full = get_data("Expenses")
+                new_row = pd.DataFrame([{"Owner": owner_id, "Date": str(datetime.now().date()), "Description": desc, "Amount": amt}])
+                update_data("Expenses", pd.concat([df_full, new_row], ignore_index=True))
+                st.success("Added")
                 st.rerun()
 
-# ==========================
-# B. NEW BILL (SALES)
-# ==========================
-elif menu == "🛒 New Bill":
-    st.header("🧾 Create Invoice")
-    df_stock = get_data("Inventory")
-    
-    with st.form("bill_form"):
-        c1, c2 = st.columns(2)
-        cust_name = c1.text_input("Customer Name")
-        date = c2.date_input("Date", datetime.now())
-        
-        # Item Select
-        items_list = df_stock["Item Name"].tolist() if not df_stock.empty else []
-        item = st.selectbox("Select Item", items_list)
-        qty = st.number_input("Quantity", 1)
-        
-        # Price Auto-Fetch
-        price = 0
-        if item and not df_stock.empty:
-            row = df_stock[df_stock["Item Name"] == item]
-            if not row.empty:
-                unit_price = row.iloc[0]["Price"]
-                price = unit_price * qty
-                st.info(f"💰 Total Amount: Rs {price}")
-
-        paid = st.number_input("Paid Amount", 0)
-        
-        if st.form_submit_button("Save Bill"):
-            udhaar = price - paid
-            df_sales = get_data("Sales")
-            new_sale = pd.DataFrame([{
-                "Date": str(date), "Customer": cust_name, "Item": item, 
-                "Qty": qty, "Total": price, "Paid": paid, "Udhaar": udhaar
-            }])
-            update_data("Sales", pd.concat([df_sales, new_sale], ignore_index=True))
-            
-            # Simple Stock Minus Logic (Optional for now)
-            st.success("Bill Saved Successfully!")
-
-# ==========================
-# C. CUSTOMERS (KHATA)
-# ==========================
-elif menu == "👥 Customers":
-    st.header("👥 Customer Udhaar List")
-    # Yahan hum Sales data se customer ka total udhaar nikal saktay hain
-    df_sales = get_data("Sales")
-    if not df_sales.empty:
-        # Group by Customer and sum Udhaar
-        khata = df_sales.groupby("Customer")[["Total", "Paid", "Udhaar"]].sum().reset_index()
-        st.dataframe(khata, use_container_width=True)
-    else:
-        st.info("No sales data yet.")
-
-# ==========================
-# D. EXPENSES & BANK (Admin Only)
-# ==========================
-elif menu == "💸 Expenses":
-    st.header("💸 Daily Expenses")
-    df_exp = get_data("Expenses")
-    st.dataframe(df_exp, use_container_width=True)
-    
-    with st.form("exp_form"):
-        desc = st.text_input("Expense Name")
-        amt = st.number_input("Amount", 0)
-        if st.form_submit_button("Add Expense"):
-            new_row = pd.DataFrame([{"Date": str(datetime.now().date()), "Description": desc, "Amount": amt}])
-            update_data("Expenses", pd.concat([df_exp, new_row], ignore_index=True))
-            st.success("Saved!")
-            st.rerun()
-
-elif menu == "🏦 Bank/Cash":
-    st.header("🏦 Cash Flow")
-    df_bank = get_data("Bank")
-    st.dataframe(df_bank, use_container_width=True)
-    # Simple form same as above...
-    
-# ==========================
-# E. ADMIN USERS
-# ==========================
-elif menu == "🛠️ Admin Users":
-    st.header("🔑 Manage Access")
-    st.write("Current Users (Code based):")
-    st.code("Admin: admin\nStaff: staff")
-    st.warning("To add more users, edit the 'users' list in the code.")
+    elif menu == "🏦 Bank/Cash":
+        st.header("🏦 Bank & Cash")
+        df_bank = get_my_data("Bank")
+        st.dataframe(df_bank.drop(columns=["Owner"], errors="ignore"), use_container_width=True)
+        # Add form logic similarly...
