@@ -6,15 +6,15 @@ import time
 import json
 import firebase_admin
 from firebase_admin import credentials, firestore
+import re # Nayi library safai ke liye
 
 # --- 1. CONFIG ---
 st.set_page_config(page_title="E-Com Pro", page_icon="🚀", layout="wide", initial_sidebar_state="expanded")
 
-# --- 2. FIREBASE CONNECTION (AUTO-FIXER ADDED) ---
+# --- 2. FIREBASE CONNECTION (SUPER CLEANER ADDED) ---
 if not firebase_admin._apps:
     try:
         # Secrets se key uthao
-        # Make sure secrets.toml mein [firebase] section ho
         if "firebase" not in st.secrets:
             st.error("🚨 Secrets file mein [firebase] section nahi mila!")
             st.stop()
@@ -28,17 +28,35 @@ if not firebase_admin._apps:
             st.error("🚨 Key Error: Secrets mein 'my_key' sahi JSON format mein nahi hay.")
             st.stop()
         
-        # 🔥 CRITICAL FIX: Private Key ki new lines ko theek karo
-        # Yeh 'InvalidByte' aur 'MalformedFraming' errors ko khatam kar de ga
+        # 🔥 MAGIC FIX: Har qisam ka kachra saaf karein
         if "private_key" in key_dict:
-            key_dict["private_key"] = key_dict["private_key"].replace("\\n", "\n")
+            raw_key = key_dict["private_key"]
+            
+            # 1. Comma (,) aur Dot (.) nikal dein jo ghalti se aa gaye hain
+            # Lekin header/footer ka khayal rakhein
+            cleaned_key = raw_key.replace(",", "").replace(".", "")
+            
+            # 2. Asal New Lines wapis layen (\n)
+            cleaned_key = cleaned_key.replace("\\n", "\n")
+            
+            # 3. Agar ab bhi key kharab hay, tu header/footer manually set karein
+            if "-----BEGIN PRIVATE KEY-----" not in cleaned_key:
+                # Sirf base64 hissa uthayen (A-Z, 0-9, +, /)
+                body = re.sub(r'[^a-zA-Z0-9+/]', '', cleaned_key)
+                # Key ko wapis jorrein
+                cleaned_key = f"-----BEGIN PRIVATE KEY-----\n{body}\n-----END PRIVATE KEY-----\n"
+            
+            # Wapis dictionary mein dalein
+            key_dict["private_key"] = cleaned_key
         
-        # Ab connect karo
+        # Connect
         cred = credentials.Certificate(key_dict)
         firebase_admin.initialize_app(cred)
         
     except Exception as e:
+        # Agar ab bhi error aaye tu user ko batayen
         st.error(f"🚨 Connection Error: {e}")
+        st.info("💡 Tip: Agar ye masla hal na ho, tu Firebase Console se bilkul NAYI key download kar ke Secrets mein dalein.")
         st.stop()
 
 db = firestore.client()
@@ -69,41 +87,33 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. LOGIN SYSTEM (PERSISTENT & AUTO) ---
+# --- 4. LOGIN SYSTEM ---
 def login_system():
-    # 1. Check URL for existing session (Auto Login)
     if "user_session" not in st.session_state:
-        # URL se check karo (query params)
         qp = st.query_params
         if "session" in qp:
             user_email = qp["session"]
-            # Verify if user actually exists (Quick check)
             if user_email == "admin@owner.com":
                 st.session_state["user_session"] = "SUPER_ADMIN"
                 st.session_state["is_admin"] = True
                 st.session_state["business_name"] = "Super Admin"
             else:
-                # Normal user verification
                 try:
                     doc = db.collection("users").document(user_email).get()
                     if doc.exists:
                         st.session_state["user_session"] = user_email
                         st.session_state["business_name"] = doc.to_dict().get("business_name", "Shop")
                         st.session_state["is_admin"] = False
-                except:
-                    pass # Fail silently and show login screen
+                except: pass
 
-    # 2. Init Session State defaults
     if "user_session" not in st.session_state:
         st.session_state["user_session"] = None
         st.session_state["is_admin"] = False
         st.session_state["business_name"] = "My Shop"
 
-    # 3. If Logged In, Return True
     if st.session_state["user_session"]: 
         return True
 
-    # 4. Show Login Screen
     c1, c2, c3 = st.columns([1, 1.5, 1])
     with c2:
         st.markdown("<br><br><div style='text-align:center; padding: 40px; background: #1E293B; border-radius: 20px; border: 1px solid #334155;'>", unsafe_allow_html=True)
@@ -114,21 +124,19 @@ def login_system():
         password = st.text_input("Password", type="password")
         
         if st.button("✨ Login", use_container_width=True):
-            # A. Super Admin
             if email == "apexsports480@gmail.com" and password == "13032a7c":
                 st.session_state["user_session"] = "SUPER_ADMIN"
                 st.session_state["is_admin"] = True
-                st.query_params["session"] = "admin@owner.com" # Save to URL
+                st.query_params["session"] = "admin@owner.com"
                 st.rerun()
             
-            # B. Clients
             try:
                 doc = db.collection("users").document(email).get()
                 if doc.exists and doc.to_dict().get("password") == password:
                     st.session_state["user_session"] = email
                     st.session_state["business_name"] = doc.to_dict().get("business_name")
                     st.session_state["is_admin"] = False
-                    st.query_params["session"] = email # Save to URL
+                    st.query_params["session"] = email
                     st.success("Success!")
                     time.sleep(0.1)
                     st.rerun()
@@ -192,7 +200,7 @@ def get_expenses(owner_id):
 if is_super_admin:
     st.sidebar.markdown("### 👑 Super Admin")
     if st.sidebar.button("Logout"):
-        st.query_params.clear() # Clear URL
+        st.query_params.clear()
         st.session_state["user_session"] = None
         st.rerun()
     
@@ -234,7 +242,7 @@ with st.sidebar:
     menu = st.radio("Menu", ["📊 Overview", "📝 New Order", "🚚 Orders", "📦 Inventory", "💸 Expenses"])
     st.write("---")
     if st.button("Logout"):
-        st.query_params.clear() # Clear URL
+        st.query_params.clear()
         st.session_state["user_session"] = None
         st.rerun()
 
