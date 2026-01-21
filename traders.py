@@ -27,15 +27,27 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. CONNECTION (ROBUST) ---
+# --- 2. CONNECTION (SAFETY LOCK ADDED) ---
 def get_connection():
     # Check 1: Service Account Key
     if "service_account" not in st.secrets:
         st.error("🚨 Error: Secrets file mein '[service_account]' section nahi mila.")
         st.stop()
     
+    # Secrets se data uthao (Copy bana kar taake original kharab na ho)
+    creds_dict = dict(st.secrets["service_account"])
+    
+    # 🔥 SAFETY LOCK: Key ki safai
+    if "private_key" in creds_dict:
+        # 1. Agar shuru mein \ hay, tu hata do (Yehi error ki wajah thi)
+        if creds_dict["private_key"].startswith("\\"):
+            creds_dict["private_key"] = creds_dict["private_key"][1:]
+            
+        # 2. New lines ko theek karo
+        creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    creds = Credentials.from_service_account_info(st.secrets["service_account"], scopes=scope)
+    creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
     client = gspread.authorize(creds)
     return client.open("SI Traders Data") # Sheet Name Verify Karein
 
@@ -97,7 +109,7 @@ def login_screen():
                         st.session_state["user_role"] = "User"
                         st.rerun()
                     else: st.error("Wrong ID/Pass")
-                else: st.error("User list empty")
+                else: st.error("User list empty or sheet error")
 
 if not st.session_state["logged_in"]:
     login_screen()
