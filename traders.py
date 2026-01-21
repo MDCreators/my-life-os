@@ -4,6 +4,7 @@ from datetime import datetime
 import pytz 
 import gspread
 from google.oauth2.service_account import Credentials
+import time  # <--- YEH MISSING THA, AB LAGA DIYA HAY
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="SI Traders", page_icon="⚖️", layout="wide")
@@ -164,10 +165,10 @@ if "Khareedari" in active_tab:
             pk_time = datetime.now(pytz.timezone('Asia/Karachi')).strftime("%Y-%m-%d %H:%M")
             if save_data("Purchase", [pk_time, party, final_weight_kg, rate, total_amt, details]):
                 st.success("Saved Successfully!")
-                time.sleep(1) # Thora wait karein
+                time.sleep(1) # Ab yeh chalay ga!
                 st.rerun()
 
-    # History Table (Ab data nazar aye ga)
+    # History Table
     st.subheader("📜 Aaj ki Khareedari (History)")
     df = load_data("Purchase")
     if not df.empty:
