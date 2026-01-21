@@ -23,7 +23,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. CONNECTION ---
+# --- 2. CONNECTION (WAPIS "TRADE" NAAM PAR SET KIYA) ---
 def get_connection():
     if "service_account" not in st.secrets: st.error("Secrets Missing"); st.stop()
     creds = dict(st.secrets["service_account"])
@@ -33,9 +33,9 @@ def get_connection():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     creds = Credentials.from_service_account_info(creds, scopes=scope)
     client = gspread.authorize(creds)
-    # Correct Sheet ID from previous fix
-    sheet_id = "1SQUMvySccNWz_G3ziZmiFB9Ry2thjxdnNGWvhppv-dE"
-    return client.open_by_key(sheet_id)
+    
+    # 🔥 FIX: Wapis Naam wala method use kiya (Kyunke ID mein ghalti thi)
+    return client.open("Trade")
 
 # --- 3. HELPER FUNCTIONS ---
 def get_worksheet_safe(client, tab_name):
