@@ -10,39 +10,32 @@ from firebase_admin import credentials, firestore
 # --- 1. CONFIG ---
 st.set_page_config(page_title="E-Com Pro", page_icon="🚀", layout="wide", initial_sidebar_state="expanded")
 
-# --- 2. FIREBASE CONNECTION (SIMPLE & CLEAN) ---
-# Sirf connect karay ga, key ko chheray ga nahi
+# --- 2. FIREBASE CONNECTION ---
 if not firebase_admin._apps:
     try:
-        # Secrets check
         if "firebase" not in st.secrets:
             st.error("🚨 Secrets file mein [firebase] section nahi mila.")
             st.stop()
-            
-        key_content = st.secrets["firebase"]["my_key"]
         
-        # JSON Parse
+        key_content = st.secrets["firebase"]["my_key"]
         try:
             key_dict = json.loads(key_content)
         except json.JSONDecodeError:
             st.error("🚨 JSON Error: Secrets mein key sahi copy-paste nahi hui.")
             st.stop()
         
-        # 🔥 FINAL FIX: Sirf New Line ko set karein, baqi key ko hath na lagayen
         if "private_key" in key_dict:
             key_dict["private_key"] = key_dict["private_key"].replace("\\n", "\n")
         
-        # Connect
         cred = credentials.Certificate(key_dict)
         firebase_admin.initialize_app(cred)
-        
     except Exception as e:
         st.error(f"🚨 Connection Error: {e}")
         st.stop()
 
 db = firestore.client()
 
-# --- 3. DARK MODE UI (Baqi App Same Hay) ---
+# --- 3. UI STYLING ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
@@ -91,17 +84,14 @@ def login_system():
         st.markdown("<br><br><div style='text-align:center; padding: 40px; background: #1E293B; border-radius: 20px; border: 1px solid #334155;'>", unsafe_allow_html=True)
         st.markdown("<h1 style='color:#6366F1;'>🚀 E-Com Pro</h1>", unsafe_allow_html=True)
         st.markdown("<p>Secure Merchant Portal</p>", unsafe_allow_html=True)
-        
         email = st.text_input("Email", placeholder="admin@shop.com")
         password = st.text_input("Password", type="password")
-        
         if st.button("✨ Login", use_container_width=True):
             if email == "apexsports480@gmail.com" and password == "13032a7c":
                 st.session_state["user_session"] = "SUPER_ADMIN"
                 st.session_state["is_admin"] = True
                 st.query_params["session"] = "admin@owner.com"
                 st.rerun()
-            
             try:
                 doc = db.collection("users").document(email).get()
                 if doc.exists and doc.to_dict().get("password") == password:
@@ -124,7 +114,7 @@ current_owner = st.session_state["user_session"]
 is_super_admin = st.session_state["is_admin"]
 current_biz_name = st.session_state.get("business_name", "My Shop")
 
-# --- 5. FUNCTIONS (Standard) ---
+# --- 5. FUNCTIONS (Updated for Discount) ---
 def get_products(owner_id):
     docs = db.collection("products").where("owner", "==", owner_id).stream()
     return [{"id": d.id, **d.to_dict()} for d in docs]
@@ -138,14 +128,17 @@ def add_product(name, price, cost, stock, sku, owner_id):
 def update_stock(product_id, new_qty):
     db.collection("products").document(product_id).update({"stock": int(new_qty)})
 
-def create_order(customer, phone, address, items, subtotal, delivery, ship_cost, pack_cost, total, source, owner_id):
+# 🔥 Update: Added discount parameter
+def create_order(customer, phone, address, items, subtotal, discount_amt, delivery, ship_cost, pack_cost, total, source, owner_id):
     tz = pytz.timezone('Asia/Karachi')
+    # Net Profit formula mein discount bhi nikal diya
     net_profit = total - (sum([i['cost']*i['qty'] for i in items]) + ship_cost + pack_cost)
+    
     db.collection("orders").add({
         "date": str(datetime.now(tz)), "customer": customer, "phone": phone, "address": address,
-        "items": items, "subtotal": subtotal, "delivery": delivery,
-        "ship_cost": ship_cost, "pack_cost": pack_cost, "total": total,
-        "net_profit": net_profit, "source": source, "status": "Pending",
+        "items": items, "subtotal": subtotal, "discount": discount_amt, # Saving discount
+        "delivery": delivery, "ship_cost": ship_cost, "pack_cost": pack_cost,
+        "total": total, "net_profit": net_profit, "source": source, "status": "Pending",
         "owner": owner_id, "timestamp": firestore.SERVER_TIMESTAMP
     })
 
@@ -168,7 +161,7 @@ def get_expenses(owner_id):
     data.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
     return data
 
-# --- 6. SUPER ADMIN & MERCHANT UI (Standard) ---
+# --- 6. ADMIN & MERCHANT UI ---
 if is_super_admin:
     st.sidebar.markdown("### 👑 Super Admin")
     if st.sidebar.button("Logout"):
@@ -226,12 +219,14 @@ if menu == "📊 Overview":
     c3.markdown(f"<div class='kpi-card'><div class='kpi-title'>Expenses</div><div class='kpi-value' style='color:#F87171'>Rs {sum([e['amount'] for e in expenses]):,}</div></div>", unsafe_allow_html=True)
     c4.markdown(f"<div class='kpi-card'><div class='kpi-title'>Net Profit</div><div class='kpi-value' style='color:#818CF8'>Rs {net:,}</div></div>", unsafe_allow_html=True)
 
+# === 🔥 NEW ORDER (With Discount) ===
 elif menu == "📝 New Order":
     st.title("Create Order")
     products = get_products(current_owner)
     p_names = [p['name'] for p in products if p['stock'] > 0]
     c1, c2 = st.columns(2)
     if 'cart' not in st.session_state: st.session_state.cart = []
+    
     with c1:
         sel = st.selectbox("Product", ["Select..."] + p_names)
         if sel != "Select...":
@@ -241,25 +236,41 @@ elif menu == "📝 New Order":
         if st.session_state.cart:
             st.dataframe(pd.DataFrame(st.session_state.cart))
             if st.button("Clear Cart"): st.session_state.cart = []
+    
     with c2:
         with st.form("checkout"):
             cust = st.text_input("Name")
             phone = st.text_input("Phone")
             addr = st.text_area("Address")
             src = st.selectbox("Source", ["WhatsApp", "Instagram", "Facebook", "TikTok", "Web", "Walk-in", "Other"])
+            
+            # Calculations
             subt = sum([i['price']*i['qty'] for i in st.session_state.cart])
-            c_a, c_b, c_c = st.columns(3)
-            dlv = c_a.number_input("Delivery", value=200)
-            ship = c_b.number_input("Courier Cost", value=180)
-            pack = c_c.number_input("Packing", value=15)
+            st.markdown(f"**Subtotal:** Rs {subt}")
+            
+            # Inputs
+            c_a, c_b, c_c, c_d = st.columns(4)
+            disc_perc = c_a.number_input("Discount (%)", 0, 100, 0)
+            dlv = c_b.number_input("Delivery", value=200)
+            ship = c_c.number_input("Courier Cost", value=180)
+            pack = c_d.number_input("Packing", value=15)
+            
+            # Logic
+            disc_amt = int(subt * (disc_perc / 100))
+            final_total = subt - disc_amt + dlv
+            
+            st.markdown(f"### Total Bill: Rs {final_total}")
+            if disc_amt > 0: st.caption(f"Includes Discount: -Rs {disc_amt}")
+
             if st.form_submit_button("🚀 Place Order"):
                 if st.session_state.cart and cust:
-                    create_order(cust, phone, addr, st.session_state.cart, subt, dlv, ship, pack, subt+dlv, src, current_owner)
+                    create_order(cust, phone, addr, st.session_state.cart, subt, disc_amt, dlv, ship, pack, final_total, src, current_owner)
                     st.session_state.cart = []
                     st.success("Order Placed!")
                     time.sleep(0.5)
                     st.rerun()
 
+# === 🚚 ORDERS (Updated Invoice) ===
 elif menu == "🚚 Orders":
     st.title("Order Manager")
     orders = get_orders(current_owner)
@@ -276,7 +287,29 @@ elif menu == "🚚 Orders":
             with c2:
                 if st.button("🧾 Invoice", key=f"inv_{o['id']}"):
                     st.markdown("---")
-                    inv_html = f"""<div class="invoice-box"><h2 style="color:black;">INVOICE</h2><p><b>Merchant:</b> {current_biz_name}<br><b>Date:</b> {o['date'].split('.')[0]}</p><hr><p><b>Bill To:</b><br>{o['customer']}<br>{o.get('phone','')}<br>{o.get('address','')}</p><hr>{''.join([f"<div style='display:flex; justify-content:space-between;'><span>{i['name']} (x{i['qty']})</span><span>Rs {i['price']*i['qty']}</span></div>" for i in o['items']])}<br><div style="display:flex; justify-content:space-between;"><b>Delivery</b><span>Rs {o.get('delivery',0)}</span></div><hr><div style="display:flex; justify-content:space-between; font-weight:bold; font-size:18px;"><span>TOTAL</span><span>Rs {o['total']}</span></div></div>"""
+                    
+                    # Discount Row Logic
+                    disc_val = o.get('discount', 0)
+                    disc_html = ""
+                    if disc_val > 0:
+                        disc_html = f"<div style='display:flex; justify-content:space-between; color:red;'><span>Discount</span><span>- Rs {disc_val}</span></div>"
+
+                    inv_html = f"""
+                    <div class="invoice-box">
+                        <h2 style="color:black;">INVOICE</h2>
+                        <p><b>Merchant:</b> {current_biz_name}<br><b>Date:</b> {o['date'].split('.')[0]}</p>
+                        <hr>
+                        <p><b>Bill To:</b><br>{o['customer']}<br>{o.get('phone','')}<br>{o.get('address','')}</p>
+                        <hr>
+                        {''.join([f"<div style='display:flex; justify-content:space-between;'><span>{i['name']} (x{i['qty']})</span><span>Rs {i['price']*i['qty']}</span></div>" for i in o['items']])}
+                        <br>
+                        <div style="display:flex; justify-content:space-between;"><span>Subtotal</span><span>Rs {o.get('subtotal', 0)}</span></div>
+                        {disc_html}
+                        <div style="display:flex; justify-content:space-between;"><span>Delivery</span><span>Rs {o.get('delivery',0)}</span></div>
+                        <hr>
+                        <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:18px;"><span>TOTAL</span><span>Rs {o['total']}</span></div>
+                    </div>
+                    """
                     st.markdown(inv_html, unsafe_allow_html=True)
 
 elif menu == "📦 Inventory":
