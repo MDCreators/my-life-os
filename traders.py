@@ -135,14 +135,13 @@ if not st.session_state["logged_in"]:
                 else: st.warning("⚠️ No users found. Login with 'admin' / 'admin123'")
     st.stop()
 
-# --- 5. MAIN NAVIGATION (TOP BAR FOR MOBILE) ---
-st.markdown(f"<div style='text-align:center;'>👤 <b>{st.session_state['username']}</b> | <a href='#' target='_self'>Reload</a></div>", unsafe_allow_html=True)
+# --- 5. MAIN NAVIGATION ---
+st.markdown(f"<div style='text-align:center;'>👤 <b>{st.session_state['username']}</b></div>", unsafe_allow_html=True)
 
-# 🔥 TABS MOVED TO TOP (HORIZONTAL)
 tabs = ["خریداری", "فروخت", "اخراجات", "منافع / حساب"]
 if st.session_state["user_role"] == "Admin": tabs.append("Users")
 
-# This creates horizontal buttons, easier for mobile
+# Horizontal Tabs for Mobile
 menu = st.radio("Menu", tabs, horizontal=True, label_visibility="collapsed")
 st.write("---")
 
@@ -169,7 +168,8 @@ if menu == "خریداری":
         st.info(f"💰 Total Amount: **Rs {total:,.0f}**")
         
         if st.form_submit_button("📥 Save Purchase"):
-            date = datetime.now(pytz.timezone('Asia/Karachi')).strftime("%Y-%m-%d")
+            # 🔥 NEW DATE FORMAT (01-May-2026)
+            date = datetime.now(pytz.timezone('Asia/Karachi')).strftime("%d-%b-%Y")
             if save_data("Purchase", [date, party, fw, r, total, det]):
                 st.success("✅ Saved Successfully!"); time.sleep(1); st.rerun()
     
@@ -208,7 +208,8 @@ elif menu == "فروخت":
             st.info(f"💰 Bill Amount: **Rs {total:,.0f}**")
             
             if st.form_submit_button("🖨️ Save & Print"):
-                date = datetime.now(pytz.timezone('Asia/Karachi')).strftime("%Y-%m-%d")
+                # 🔥 NEW DATE FORMAT
+                date = datetime.now(pytz.timezone('Asia/Karachi')).strftime("%d-%b-%Y")
                 if save_data("Sale", [date, cust, bill, fw, r, total, det]):
                     st.session_state.invoice_data = {"date":date, "cust":cust, "bill":bill, "w":fw, "r":r, "a":f"{total:,.0f}", "det":det}
                     st.rerun()
@@ -237,7 +238,8 @@ elif menu == "اخراجات":
         amt = c1.number_input("Amount", min_value=0)
         det = c2.text_input("Details")
         if st.form_submit_button("💾 Save Expense"):
-            date = datetime.now(pytz.timezone('Asia/Karachi')).strftime("%Y-%m-%d")
+            # 🔥 NEW DATE FORMAT
+            date = datetime.now(pytz.timezone('Asia/Karachi')).strftime("%d-%b-%Y")
             if save_data("Expenses", [date, cat, amt, det]):
                 st.success("Saved!"); time.sleep(1); st.rerun()
     
