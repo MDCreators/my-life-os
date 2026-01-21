@@ -9,80 +9,14 @@ import time
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="SI Traders", page_icon="⚖️", layout="wide")
 
-# --- 🎨 PRO STYLING (MOBILE OPTIMIZED) ---
 st.markdown("""
     <style>
-        /* 1. Force Light Background & Dark Text (Fix for Mobile Dark Mode) */
-        .stApp {
-            background-color: #ffffff !important;
-            color: #000000 !important;
-        }
-        
-        /* 2. All Text Black */
-        h1, h2, h3, h4, h5, h6, p, div, span, label {
-            color: #2c3e50 !important;
-            font-family: 'Arial', sans-serif;
-        }
-        
-        /* 3. Metrics & Cards styling */
-        .metric-card {
-            background-color: #f8f9fa;
-            border: 1px solid #e9ecef;
-            padding: 15px;
-            border-radius: 12px;
-            border-left: 6px solid #2e7d32;
-            text-align: center;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            margin-bottom: 10px;
-        }
-        .metric-value {
-            font-size: 26px;
-            font-weight: 800;
-            color: #2e7d32 !important;
-        }
-        .metric-label {
-            font-size: 14px;
-            color: #666 !important;
-            text-transform: uppercase;
-        }
-        
-        /* 4. Input Fields Styling (High Contrast) */
-        .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] > div {
-            background-color: #f0f2f5 !important;
-            color: #000000 !important;
-            border: 1px solid #ced4da !important;
-            border-radius: 8px !important;
-        }
-        /* Labels above inputs */
-        .stTextInput label, .stNumberInput label, .stSelectbox label {
-            font-weight: bold;
-            color: #333333 !important;
-        }
-        
-        /* 5. Buttons Styling */
-        .stButton>button {
-            width: 100%;
-            border-radius: 8px;
-            height: 3em;
-            font-weight: bold;
-            border: none;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
-        
-        /* 6. HIDE STREAMLIT BRANDING (Clean Look) */
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        header {visibility: hidden;}
-        [data-testid="stToolbar"] {visibility: hidden;}
-        .stDeployButton {display:none;}
-        
-        /* Print Styles */
-        .invoice-box { background: white; padding: 20px; border: 2px solid #333; }
-        @media print { 
-            [data-testid="stSidebar"] { display: none; } 
-            .stApp { background: white; }
-            .invoice-box { position: absolute; top: 0; left: 0; width: 100%; border: none; } 
-        }
+        .stApp { background-color: #f4f6f9; }
+        .metric-card { background: white; padding: 15px; border-radius: 10px; border-left: 5px solid #2e7d32; box-shadow: 2px 2px 5px rgba(0,0,0,0.1); text-align: center; }
+        .expense-card { border-left: 5px solid #d32f2f; }
+        .invoice-box { background: white; padding: 30px; border: 1px solid #eee; }
+        .search-box input { border: 2px solid #2e7d32; border-radius: 5px; }
+        @media print { [data-testid="stSidebar"] { display: none; } .invoice-box { position: absolute; top: 0; left: 0; width: 100%; } }
     </style>
 """, unsafe_allow_html=True)
 
@@ -96,6 +30,7 @@ def get_connection():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     creds = Credentials.from_service_account_info(creds, scopes=scope)
     client = gspread.authorize(creds)
+    # Sheet Name: Trade
     return client.open("Trade")
 
 # --- 3. HELPER FUNCTIONS ---
@@ -160,160 +95,174 @@ if "logged_in" not in st.session_state: st.session_state.update({"logged_in": Fa
 if not st.session_state["logged_in"]:
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
-        st.markdown("<br><br>", unsafe_allow_html=True)
-        st.title("⚖️ SI Traders")
-        st.caption("Secure Login System")
-        with st.form("login_form"):
-            u = st.text_input("Username")
-            p = st.text_input("Password", type="password")
-            if st.form_submit_button("🔐 Login"):
-                if u=="admin" and p=="admin123":
-                    st.session_state.update({"logged_in":True, "username":"Admin", "user_role":"Admin"}); st.rerun()
-                users = get_users()
-                if not users.empty:
-                    match = users[(users["Username"]==u) & (users["Password"]==p)]
-                    if not match.empty:
-                        st.session_state.update({"logged_in":True, "username":u, "user_role":"User"}); st.rerun()
-                    else: st.error("❌ Invalid ID/Pass")
-                else: st.error("❌ User Not Found")
+        st.title("⚖️ SI Traders Login")
+        u = st.text_input("Username"); p = st.text_input("Password", type="password")
+        if st.button("Login"):
+            if u=="admin" and p=="admin123":
+                st.session_state.update({"logged_in":True, "username":"Admin", "user_role":"Admin"}); st.rerun()
+            users = get_users()
+            if not users.empty:
+                match = users[(users["Username"]==u) & (users["Password"]==p)]
+                if not match.empty:
+                    st.session_state.update({"logged_in":True, "username":u, "user_role":"User"}); st.rerun()
+                else: st.error("Invalid Credentials")
+            else: st.error("No Users Found")
     st.stop()
 
 # --- 5. MAIN APP ---
-with st.sidebar:
-    st.title(f"👤 {st.session_state['username']}")
-    st.write("---")
-    tabs = ["🟢 Khareedari", "🔴 Farokht", "💸 Kharcha", "📒 Closing"]
-    if st.session_state["user_role"] == "Admin": tabs.append("👥 Users")
-    menu = st.radio("Main Menu", tabs)
-    st.write("---")
-    if st.button("🚪 Logout"): st.session_state["logged_in"]=False; st.rerun()
+st.sidebar.title(f"👤 {st.session_state['username']}")
+if st.sidebar.button("Logout"): st.session_state["logged_in"]=False; st.rerun()
+
+# Updated Menu with Urdu
+tabs = ["🟢 Khareedari", "🔴 Farokht", "💸 Kharcha (Expense)", "📒 Closing"]
+if st.session_state["user_role"] == "Admin": tabs.append("👥 Users")
+menu = st.radio("Menu", tabs, horizontal=True)
+st.divider()
 
 if "invoice_data" not in st.session_state: st.session_state.invoice_data = None
 
 # === A. KHAREEDARI ===
 if "Khareedari" in menu:
-    st.header("🛒 Khareedari Entry")
+    st.header("🛒 Nayi Khareedari (New Purchase)")
     with st.form("buy"):
-        c1,c2 = st.columns(2)
-        party = c1.text_input("Party Name")
-        r = c2.number_input("Rate (Bhaao)", min_value=0)
-        
-        c3, c4 = st.columns(2)
-        w = c3.number_input("Wazan (Weight)", format="%.3f")
-        unit = c4.selectbox("Unit", ["Kg", "Grams"])
-        
-        det = st.text_input("Tafseel")
-        
+        c1,c2,c3 = st.columns(3)
+        party = c1.text_input("Party Name (Naam)")
+        w_col, u_col = c2.columns([2,1])
+        w = w_col.number_input("Wazan (Weight)", format="%.3f"); unit = u_col.selectbox("Unit", ["Kg", "Grams"])
+        r = c3.number_input("Rate (Bhaao)")
+        det = st.text_input("Tafseel (Details)")
         fw = w if unit=="Kg" else w/1000
         total = fw*r
-        
-        st.info(f"💰 Total: **Rs {total:,.0f}**")
-        
-        if st.form_submit_button("📥 Save Record"):
+        st.markdown(f"### 💰 Total: Rs {total:,.0f}")
+        if st.form_submit_button("📥 Save Purchase"):
             date = datetime.now(pytz.timezone('Asia/Karachi')).strftime("%Y-%m-%d")
             if save_data("Purchase", [date, party, fw, r, total, det]):
                 st.success("Saved!"); time.sleep(1); st.rerun()
     
-    st.subheader("Recent History")
+    st.subheader("📜 Khareedari History")
     df = load_data("Purchase")
     if not df.empty:
-        search = st.text_input("🔍 Search Party...", key="sb")
-        if search: df = df[df.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
-        st.dataframe(df, use_container_width=True)
+        # SEARCH BAR
+        search = st.text_input("🔍 Search Party Name...", key="search_buy")
+        if search:
+            df = df[df.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
         
-        # Totals
+        st.dataframe(df, use_container_width=True)
         c1,c2 = st.columns(2)
-        c1.markdown(f"<div class='metric-card'><div class='metric-label'>Total Weight</div><div class='metric-value'>{df['Weight'].sum():,.3f} Kg</div></div>", unsafe_allow_html=True)
-        c2.markdown(f"<div class='metric-card'><div class='metric-label'>Total Amount</div><div class='metric-value'>Rs {df['Amount'].sum():,.0f}</div></div>", unsafe_allow_html=True)
+        c1.info(f"Total Wazan: {df['Weight'].sum():,.3f} Kg")
+        c2.info(f"Total Raqam: Rs {df['Amount'].sum():,.0f}")
+    else: st.warning("No data found.")
 
 # === B. FAROKHT ===
 elif "Farokht" in menu:
     if st.session_state.invoice_data:
         d = st.session_state.invoice_data
         st.button("🔙 Back", on_click=lambda: st.session_state.pop("invoice_data"))
-        st.markdown(f"""<div class='invoice-box'><center><h1>SI TRADERS</h1><p>Deals in all kinds of Scrap</p></center><hr><p><b>Bill No:</b> {d['bill']}<br><b>Customer:</b> {d['cust']}<br><b>Date:</b> {d['date']}</p><table width='100%' style='border-collapse: collapse;'><tr><th style='text-align:left; border-bottom:1px solid #ddd;'>Item</th><th style='border-bottom:1px solid #ddd;'>Weight</th><th style='border-bottom:1px solid #ddd;'>Rate</th><th style='text-align:right; border-bottom:1px solid #ddd;'>Amount</th></tr><tr><td style='padding:8px 0;'>{d['det']}</td><td style='text-align:center;'>{d['w']}</td><td style='text-align:center;'>{d['r']}</td><td style='text-align:right;'>{d['a']}</td></tr></table><br><h3 style='text-align:right;'>Total: Rs {d['a']}</h3></div>""", unsafe_allow_html=True)
-        st.info("💡 Screenshot le lein ya Ctrl+P daba kar print karein")
+        st.markdown(f"""<div class='invoice-box'><center><h2>SI TRADERS</h2></center><hr><p><b>Bill:</b> {d['bill']} | <b>Customer:</b> {d['cust']}</p><table width='100%'><tr><td><b>Item</b></td><td><b>Weight</b></td><td><b>Rate</b></td><td><b>Total</b></td></tr><tr><td>{d['det']}</td><td>{d['w']}</td><td>{d['r']}</td><td>{d['a']}</td></tr></table></div>""", unsafe_allow_html=True)
     else:
-        st.header("🏷️ Farokht Entry")
+        st.header("🏷️ Nayi Farokht (New Sale)")
         with st.form("sell"):
             c1,c2 = st.columns(2); cust=c1.text_input("Customer Name"); bill=c2.text_input("Bill No")
-            c3,c4 = st.columns(2); w=c3.number_input("Wazan", format="%.3f"); unit=c4.selectbox("Unit", ["Kg","Grams"])
-            c5,c6 = st.columns(2); r=c5.number_input("Rate"); det=c6.text_input("Tafseel")
-            
+            c3,c4 = st.columns(2); w_col, u_col = c3.columns([2,1]); w=w_col.number_input("Wazan", format="%.3f"); unit=u_col.selectbox("Unit", ["Kg","Grams"]); r=c4.number_input("Rate")
+            det = st.text_input("Tafseel")
             fw = w if unit=="Kg" else w/1000
             total = fw*r
-            st.info(f"💰 Bill Amount: **Rs {total:,.0f}**")
-            
-            if st.form_submit_button("🖨️ Save & Bill"):
+            st.markdown(f"### Bill: Rs {total:,.0f}")
+            if st.form_submit_button("🖨️ Save & Print"):
                 date = datetime.now(pytz.timezone('Asia/Karachi')).strftime("%Y-%m-%d")
                 if save_data("Sale", [date, cust, bill, fw, r, total, det]):
                     st.session_state.invoice_data = {"date":date, "cust":cust, "bill":bill, "w":fw, "r":r, "a":f"{total:,.0f}", "det":det}
                     st.rerun()
         
-        st.subheader("Recent History")
+        st.subheader("📜 Farokht History")
         df = load_data("Sale")
         if not df.empty:
-            search = st.text_input("🔍 Search Bill/Customer...", key="ss")
-            if search: df = df[df.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
+            # SEARCH BAR
+            search = st.text_input("🔍 Search Customer / Bill...", key="search_sell")
+            if search:
+                df = df[df.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
+            
             st.dataframe(df, use_container_width=True)
 
-# === C. KHARCHA ===
-elif "Kharcha" in menu:
-    st.header("💸 Daily Kharcha")
+# === C. EXPENSES (NEW FEATURE) ===
+elif "Expense" in menu:
+    st.header("💸 Kharcha Entry")
     with st.form("exp"):
-        cat = st.selectbox("Kharcha Type", ["Dukan (Shop Expense)", "Imran Ali (Personal)", "Salman Khan (Personal)"])
         c1, c2 = st.columns(2)
-        amt = c1.number_input("Amount", min_value=0)
-        det = c2.text_input("Details")
+        # Dropdown for Partners & Shop
+        cat = c1.selectbox("Kharcha Type", ["Dukan (Shop Expense)", "Imran Ali (Personal)", "Salman Khan (Personal)"])
+        amt = c2.number_input("Raqam (Amount)", min_value=0)
+        det = st.text_input("Tafseel (Details)", placeholder="Chaye, Bill, etc.")
         
-        if st.form_submit_button("💾 Save Expense"):
+        if st.form_submit_button("💾 Save Kharcha"):
             date = datetime.now(pytz.timezone('Asia/Karachi')).strftime("%Y-%m-%d")
             if save_data("Expenses", [date, cat, amt, det]):
-                st.success("Saved!"); time.sleep(1); st.rerun()
+                st.success("Expense Saved!")
+                time.sleep(1); st.rerun()
     
-    st.subheader("📜 Today's Expenses")
+    st.subheader("📜 Kharcha List")
     df = load_data("Expenses")
     if not df.empty:
         st.dataframe(df, use_container_width=True)
-        st.markdown(f"<div style='background:#fee2e2; color:#b91c1c; padding:10px; border-radius:8px; font-weight:bold; text-align:center;'>Total Kharcha: Rs {df['Amount'].sum():,.0f}</div>", unsafe_allow_html=True)
+        total_exp = df["Amount"].sum()
+        st.error(f"Total Kharcha: Rs {total_exp:,.0f}")
 
 # === D. CLOSING ===
 elif "Closing" in menu:
-    st.header("📒 Munafa & Hisaab")
+    st.header("📒 Munafa aur Hisaab (Closing)")
     
-    b = load_data("Purchase"); s = load_data("Sale"); e = load_data("Expenses")
+    # Load All Data
+    b = load_data("Purchase")
+    s = load_data("Sale")
+    e = load_data("Expenses")
     
-    buy_sum = b["Amount"].sum() if not b.empty else 0
-    sell_sum = s["Amount"].sum() if not s.empty else 0
-    buy_w = b["Weight"].sum() if not b.empty else 0
-    sell_w = s["Weight"].sum() if not s.empty else 0
+    # Calculate Basics
+    buy_total = b["Amount"].sum() if not b.empty else 0
+    sell_total = s["Amount"].sum() if not s.empty else 0
+    buy_weight = b["Weight"].sum() if not b.empty else 0
+    sell_weight = s["Weight"].sum() if not s.empty else 0
     
-    shop_exp = e[e["Category"] == "Dukan (Shop Expense)"]["Amount"].sum() if not e.empty else 0
-    imran = e[e["Category"] == "Imran Ali (Personal)"]["Amount"].sum() if not e.empty else 0
-    salman = e[e["Category"] == "Salman Khan (Personal)"]["Amount"].sum() if not e.empty else 0
+    # Gross Profit
+    gross_profit = sell_total - buy_total
+    stock_in_hand = buy_weight - sell_weight
     
-    gross = sell_sum - buy_sum
-    net = gross - shop_exp
-    stock = buy_w - sell_w
-    cash = net - (imran + salman)
+    # Expense Breakdown
+    shop_exp = 0
+    imran_draw = 0
+    salman_draw = 0
     
-    c1,c2,c3 = st.columns(3)
-    c1.markdown(f"<div class='metric-card'><div class='metric-label'>Stock in Hand</div><div class='metric-value'>{stock:,.1f} Kg</div></div>", unsafe_allow_html=True)
-    c2.markdown(f"<div class='metric-card'><div class='metric-label'>Gross Profit</div><div class='metric-value'>Rs {gross:,.0f}</div></div>", unsafe_allow_html=True)
-    c3.markdown(f"<div class='metric-card' style='border-left-color:#d32f2f;'><div class='metric-label'>Shop Expense</div><div class='metric-value' style='color:#d32f2f !important;'>- {shop_exp:,.0f}</div></div>", unsafe_allow_html=True)
+    if not e.empty:
+        shop_exp = e[e["Category"] == "Dukan (Shop Expense)"]["Amount"].sum()
+        imran_draw = e[e["Category"] == "Imran Ali (Personal)"]["Amount"].sum()
+        salman_draw = e[e["Category"] == "Salman Khan (Personal)"]["Amount"].sum()
     
-    st.markdown("---")
-    st.markdown(f"<h2 style='text-align:center; color:#2e7d32;'>✅ Net Profit: Rs {net:,.0f}</h2>", unsafe_allow_html=True)
+    # Final Math
+    net_profit = gross_profit - shop_exp
+    cash_in_hand = net_profit - (imran_draw + salman_draw)
+
+    # --- DISPLAY ---
+    c1, c2, c3 = st.columns(3)
+    c1.metric("📦 Stock in Hand", f"{stock_in_hand:,.1f} Kg")
+    c2.metric("💰 Karobari Munafa (Gross)", f"Rs {gross_profit:,.0f}")
+    c3.metric("📉 Dukan Kharcha", f"- Rs {shop_exp:,.0f}")
     
-    st.markdown("### 👥 Partners Drawings")
-    cc1, cc2 = st.columns(2)
-    cc1.info(f"Imran Ali: Rs {imran:,.0f}")
-    cc2.info(f"Salman Khan: Rs {salman:,.0f}")
+    st.divider()
     
-    st.success(f"💵 **Net Cash in Hand:** Rs {cash:,.0f}")
+    # Net Profit Section
+    st.markdown(f"### ✅ Net Profit (Saaf Munafa): Rs {net_profit:,.0f}")
+    
+    st.write("---")
+    st.subheader("👥 Partners Hisaab")
+    
+    # Partners Cards
+    pc1, pc2 = st.columns(2)
+    pc1.info(f"👤 **Imran Ali** ne liye: Rs {imran_draw:,.0f}")
+    pc2.info(f"👤 **Salman Khan** ne liye: Rs {salman_draw:,.0f}")
+    
+    st.success(f"💵 **Net Cash (Baqaya Rokra):** Rs {cash_in_hand:,.0f}")
 
 elif "Users" in menu:
-    u=st.text_input("New User"); p=st.text_input("Pass")
+    u=st.text_input("User"); p=st.text_input("Pass")
     if st.button("Create"): 
         try: get_connection().worksheet("Users").append_row([u,p]); st.success("Done")
         except: st.error("Error")
