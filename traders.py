@@ -10,18 +10,23 @@ import extra_streamlit_components as stx
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="SI Traders", page_icon="⚖️", layout="wide", initial_sidebar_state="collapsed")
 
-# --- 2. CSS (WHITE LABEL + MOBILE NAV) ---
+# --- 2. CSS (URDU FONT & STYLING) ---
 st.markdown("""
     <link rel="apple-touch-icon" href="https://img.icons8.com/color/48/scales.png">
     <link rel="icon" type="image/png" href="https://img.icons8.com/color/48/scales.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     
     <style>
-        /* 1. APP BACKGROUND & TEXT */
+        /* 1. APP BACKGROUND */
         .stApp { background-color: #ffffff !important; color: #000000 !important; }
-        h1, h2, h3, h4, h5, h6, p, div, span, label, li { color: #2c3e50 !important; font-family: 'Arial', sans-serif; }
         
-        /* 2. HIDE BRANDING (Header/Footer/Menu) */
+        /* 2. TEXT STYLING (URDU OPTIMIZED) */
+        h1, h2, h3, h4, h5, h6, p, div, span, label, li, button { 
+            color: #2c3e50 !important; 
+            font-family: 'Arial', sans-serif; 
+        }
+        
+        /* 3. HIDE BRANDING */
         header {visibility: hidden !important; height: 0px !important;}
         footer {visibility: hidden !important; height: 0px !important;}
         #MainMenu {visibility: hidden !important; display: none !important;}
@@ -29,15 +34,15 @@ st.markdown("""
         div[data-testid="stToolbar"] {visibility: hidden !important; display: none !important;}
         div[data-testid="stDecoration"] {visibility: hidden !important; display: none !important;}
         
-        /* 3. NAVIGATION TABS STYLING (Top Menu) */
+        /* 4. NAVIGATION TABS (RIGHT ALIGNED FOR URDU FEEL) */
         div[data-testid="stRadio"] > div {
-            flex-direction: row;
+            flex-direction: row-reverse; /* Urdu style tabs */
             justify-content: center;
             background-color: #f8f9fa;
             border-radius: 15px;
             padding: 5px;
             margin-bottom: 20px;
-            overflow-x: auto; /* Scroll on small phones */
+            overflow-x: auto;
         }
         div[data-testid="stRadio"] label {
             background-color: transparent !important;
@@ -47,29 +52,43 @@ st.markdown("""
             cursor: pointer;
             border: 1px solid transparent;
         }
-        /* Active Tab Style */
         div[data-testid="stRadio"] label[data-checked="true"] {
             background-color: #2e7d32 !important;
             color: white !important;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
-        /* Tab Text Color Override */
-        div[data-testid="stRadio"] label p {
-            font-weight: bold !important;
-            font-size: 14px !important;
-        }
-        div[data-testid="stRadio"] label[data-checked="true"] p {
-            color: white !important;
-        }
+        div[data-testid="stRadio"] label p { font-size: 16px !important; font-weight: bold !important; }
+        div[data-testid="stRadio"] label[data-checked="true"] p { color: white !important; }
 
-        /* 4. CARDS & UI */
-        .metric-card { background-color: #f8f9fa; border: 1px solid #e9ecef; padding: 15px; border-radius: 12px; border-left: 6px solid #2e7d32; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 10px; }
-        .metric-value { font-size: 26px; font-weight: 800; color: #2e7d32 !important; }
-        .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] > div { background-color: #f0f2f5 !important; color: #000000 !important; border: 1px solid #ced4da !important; border-radius: 8px !important; }
-        .stButton>button { width: 100%; border-radius: 8px; height: 3em; font-weight: bold; border: none; background: linear-gradient(to right, #2e7d32, #1b5e20); color: white !important; }
+        /* 5. INPUT FIELDS (RIGHT ALIGN TEXT) */
+        .stTextInput input, .stNumberInput input { 
+            text-align: right; 
+            background-color: #f0f2f5 !important;
+            color: #000000 !important;
+            border: 1px solid #ced4da !important;
+            border-radius: 8px !important;
+        }
+        .stSelectbox div[data-baseweb="select"] > div {
+            background-color: #f0f2f5 !important;
+            color: #000000 !important;
+            border: 1px solid #ced4da !important;
+            border-radius: 8px !important;
+            direction: rtl;
+        }
         
-        /* 5. PRINT */
-        .invoice-box { background: white; padding: 20px; border: 2px solid #333; }
+        /* 6. BUTTONS */
+        .stButton>button { 
+            width: 100%; border-radius: 8px; height: 3em; font-weight: bold; border: none; 
+            background: linear-gradient(to right, #2e7d32, #1b5e20); color: white !important; 
+            font-size: 18px !important;
+        }
+        
+        /* 7. CARDS */
+        .metric-card { background-color: #f8f9fa; border: 1px solid #e9ecef; padding: 15px; border-radius: 12px; border-right: 6px solid #2e7d32; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 10px; }
+        .metric-value { font-size: 26px; font-weight: 800; color: #2e7d32 !important; }
+        
+        /* 8. PRINT */
+        .invoice-box { background: white; padding: 20px; border: 2px solid #333; direction: rtl; }
         @media print { .stApp { background: white; } .invoice-box { position: absolute; top: 0; left: 0; width: 100%; border: none; } div[data-testid="stRadio"] {display: none;} }
     </style>
 """, unsafe_allow_html=True)
@@ -83,10 +102,9 @@ def get_connection():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     creds = Credentials.from_service_account_info(creds, scopes=scope)
     client = gspread.authorize(creds)
-    # Correct Sheet Name
     return client.open("Trade")
 
-# --- 4. HELPERS ---
+# --- 4. HELPER FUNCTIONS ---
 def get_worksheet_safe(client, tab_name):
     try: return client.worksheet(tab_name)
     except: 
@@ -155,7 +173,7 @@ if not st.session_state["logged_in"]:
             with st.form("login_form"):
                 u = st.text_input("Username")
                 p = st.text_input("Password", type="password")
-                if st.form_submit_button("🔐 Login"):
+                if st.form_submit_button("🔐 لاگ ان کریں"):
                     if u=="admin" and p=="admin123":
                         st.session_state.update({"logged_in":True, "username":"Admin", "user_role":"Admin"})
                         cookie_manager.set("traders_user", "Admin", expires_at=datetime.now() + timedelta(days=30))
@@ -169,21 +187,20 @@ if not st.session_state["logged_in"]:
                             cookie_manager.set("traders_user", u, expires_at=datetime.now() + timedelta(days=30))
                             cookie_manager.set("traders_role", "User", expires_at=datetime.now() + timedelta(days=30))
                             st.rerun()
-                        else: st.error("❌ Invalid ID/Pass")
-                    else: st.error("❌ User Not Found")
+                        else: st.error("❌ غلط پاسورڈ")
+                    else: st.error("❌ یوزر نہیں ملا")
         st.stop()
 
-# --- 6. MAIN APP (TOP NAVIGATION) ---
-st.markdown(f"<h3 style='text-align:center; color:#666;'>👤 {st.session_state['username']}</h3>", unsafe_allow_html=True)
+# --- 6. MAIN APP (TOP URDU NAVIGATION) ---
+st.markdown(f"<div style='text-align:center; color:#666; margin-bottom:10px;'>👤 {st.session_state['username']}</div>", unsafe_allow_html=True)
 
-# URDU LABELS + TOP NAVIGATION
-tabs = ["🛒 Khareedari (Purchase)", "🏷️ Farokht (Sale)", "💸 Kharcha (Expenses)", "📒 Closing (Profit)"]
-if st.session_state["user_role"] == "Admin": tabs.append("👥 Users")
+# URDU TABS
+tabs = ["🛒 خریداری", "🏷️ فروخت", "💸 اخراجات", "📒 کلوزنگ / منافع"]
+if st.session_state["user_role"] == "Admin": tabs.append("👥 یوزرز")
 
-# Sidebar ki jagah ab Upar Menu hoga
 selected_tab = st.radio("Navigation", tabs, horizontal=True, label_visibility="collapsed")
 
-if st.button("🚪 Logout", key="logout_top"): 
+if st.button("🚪 لاگ آؤٹ (Logout)", key="logout_top"): 
     cookie_manager.delete("traders_user")
     cookie_manager.delete("traders_role")
     st.session_state["logged_in"]=False
@@ -193,87 +210,108 @@ st.write("---")
 
 if "invoice_data" not in st.session_state: st.session_state.invoice_data = None
 
-# === A. KHAREEDARI ===
-if "Khareedari" in selected_tab:
-    st.header("🛒 Khareedari Entry")
+# === A. KHAREEDARI (URDU) ===
+if "خریداری" in selected_tab:
+    st.markdown("<h2 style='text-align:right;'>🛒 نئی خریداری</h2>", unsafe_allow_html=True)
     with st.form("buy"):
-        c1,c2 = st.columns(2); party = c1.text_input("Party Name (Naam)"); r = c2.number_input("Rate (Bhaao)", min_value=0)
-        c3, c4 = st.columns(2); w = c3.number_input("Wazan (Weight)", format="%.3f"); unit = c4.selectbox("Unit", ["Kg", "Grams"])
-        det = st.text_input("Tafseel (Details)")
+        c1,c2 = st.columns(2)
+        r = c1.number_input("ریٹ (بھاؤ)", min_value=0)
+        party = c2.text_input("پارٹی کا نام")
+        
+        c3, c4 = st.columns(2)
+        unit = c3.selectbox("یونٹ", ["Kg", "Grams"])
+        w = c4.number_input("وزن", format="%.3f")
+        
+        det = st.text_input("تفصیل")
+        
         fw = w if unit=="Kg" else w/1000
         total = fw*r
-        st.markdown(f"<h3 style='color:#2e7d32;'>Total: Rs {total:,.0f}</h3>", unsafe_allow_html=True)
-        if st.form_submit_button("📥 Save Record"):
+        
+        st.markdown(f"<h3 style='text-align:center; color:#2e7d32;'>کل رقم: {total:,.0f} روپے</h3>", unsafe_allow_html=True)
+        if st.form_submit_button("💾 محفوظ کریں (Save)"):
             date = datetime.now(pytz.timezone('Asia/Karachi')).strftime("%Y-%m-%d")
             if save_data("Purchase", [date, party, fw, r, total, det]):
-                st.success("Saved!"); time.sleep(1); st.rerun()
+                st.success("محفوظ ہو گیا!"); time.sleep(1); st.rerun()
     
-    st.subheader("📜 Recent History")
+    st.subheader("📜 خریداری ریکارڈ")
     df = load_data("Purchase")
     if not df.empty:
-        search = st.text_input("🔍 Search Party...", key="sb")
+        search = st.text_input("🔍 نام تلاش کریں...", key="sb")
         if search: df = df[df.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
         st.dataframe(df, use_container_width=True)
         c1,c2 = st.columns(2)
-        c1.markdown(f"<div class='metric-card'><div class='metric-label'>Total Weight</div><div class='metric-value'>{df['Weight'].sum():,.3f} Kg</div></div>", unsafe_allow_html=True)
-        c2.markdown(f"<div class='metric-card'><div class='metric-label'>Total Amount</div><div class='metric-value'>Rs {df['Amount'].sum():,.0f}</div></div>", unsafe_allow_html=True)
+        c1.markdown(f"<div class='metric-card'><div class='metric-label'>کل وزن</div><div class='metric-value'>{df['Weight'].sum():,.3f} Kg</div></div>", unsafe_allow_html=True)
+        c2.markdown(f"<div class='metric-card'><div class='metric-label'>کل رقم</div><div class='metric-value'>Rs {df['Amount'].sum():,.0f}</div></div>", unsafe_allow_html=True)
 
-# === B. FAROKHT ===
-elif "Farokht" in selected_tab:
+# === B. FAROKHT (URDU) ===
+elif "فروخت" in selected_tab:
     if st.session_state.invoice_data:
         d = st.session_state.invoice_data
-        st.button("🔙 Back", on_click=lambda: st.session_state.pop("invoice_data"))
-        st.markdown(f"""<div class='invoice-box'><center><h1>SI TRADERS</h1><p>Deals in all kinds of Scrap</p></center><hr><p><b>Bill No:</b> {d['bill']}<br><b>Customer:</b> {d['cust']}<br><b>Date:</b> {d['date']}</p><table width='100%' style='border-collapse: collapse;'><tr><th style='text-align:left; border-bottom:1px solid #ddd;'>Item</th><th style='border-bottom:1px solid #ddd;'>Weight</th><th style='border-bottom:1px solid #ddd;'>Rate</th><th style='text-align:right; border-bottom:1px solid #ddd;'>Amount</th></tr><tr><td style='padding:8px 0;'>{d['det']}</td><td style='text-align:center;'>{d['w']}</td><td style='text-align:center;'>{d['r']}</td><td style='text-align:right;'>{d['a']}</td></tr></table><br><h3 style='text-align:right;'>Total: Rs {d['a']}</h3></div>""", unsafe_allow_html=True)
-        st.info("💡 Screenshot le lein ya Ctrl+P daba kar print karein")
+        st.button("🔙 واپس", on_click=lambda: st.session_state.pop("invoice_data"))
+        st.markdown(f"""
+        <div class='invoice-box'>
+            <center><h1>SI TRADERS</h1><p>اسکریپ ڈیلرز</p></center><hr>
+            <p style='text-align:right;'><b>بل نمبر:</b> {d['bill']}<br><b>کسٹمر:</b> {d['cust']}<br><b>تاریخ:</b> {d['date']}</p>
+            <table width='100%' style='border-collapse: collapse; direction:rtl;'>
+                <tr style='background:#eee;'><th style='text-align:right;'>آئٹم</th><th>وزن</th><th>ریٹ</th><th style='text-align:left;'>رقم</th></tr>
+                <tr><td style='padding:8px 0;'>{d['det']}</td><td style='text-align:center;'>{d['w']}</td><td style='text-align:center;'>{d['r']}</td><td style='text-align:left;'>{d['a']}</td></tr>
+            </table><br>
+            <h3 style='text-align:left;'>ٹوٹل: {d['a']} روپے</h3>
+        </div>""", unsafe_allow_html=True)
+        st.info("💡 اسکرین شاٹ لے لیں یا پرنٹ کریں")
     else:
-        st.header("🏷️ Farokht Entry")
+        st.markdown("<h2 style='text-align:right;'>🏷️ نئی فروخت</h2>", unsafe_allow_html=True)
         with st.form("sell"):
-            c1,c2 = st.columns(2); cust=c1.text_input("Customer Name"); bill=c2.text_input("Bill No")
-            c3,c4 = st.columns(2); w=c3.number_input("Wazan (Weight)", format="%.3f"); unit=c4.selectbox("Unit", ["Kg","Grams"])
-            c5,c6 = st.columns(2); r=c5.number_input("Rate (Bhaao)"); det=c6.text_input("Tafseel")
+            c1,c2 = st.columns(2); bill=c1.text_input("بل نمبر"); cust=c2.text_input("کسٹمر کا نام")
+            c3,c4 = st.columns(2); unit=c3.selectbox("یونٹ", ["Kg","Grams"]); w=c4.number_input("وزن", format="%.3f")
+            c5,c6 = st.columns(2); det=c5.text_input("تفصیل"); r=c6.number_input("ریٹ (بھاؤ)")
+            
             fw = w if unit=="Kg" else w/1000
             total = fw*r
-            st.markdown(f"<h3 style='color:#2e7d32;'>Bill: Rs {total:,.0f}</h3>", unsafe_allow_html=True)
-            if st.form_submit_button("🖨️ Save & Bill"):
+            st.markdown(f"<h3 style='text-align:center; color:#2e7d32;'>بل: {total:,.0f} روپے</h3>", unsafe_allow_html=True)
+            if st.form_submit_button("🖨️ محفوظ کریں اور بل بنائیں"):
                 date = datetime.now(pytz.timezone('Asia/Karachi')).strftime("%Y-%m-%d")
                 if save_data("Sale", [date, cust, bill, fw, r, total, det]):
                     st.session_state.invoice_data = {"date":date, "cust":cust, "bill":bill, "w":fw, "r":r, "a":f"{total:,.0f}", "det":det}
                     st.rerun()
-        st.subheader("📜 Recent History")
+        st.subheader("📜 فروخت ریکارڈ")
         df = load_data("Sale")
         if not df.empty:
-            search = st.text_input("🔍 Search Bill/Customer...", key="ss")
+            search = st.text_input("🔍 بل نمبر / نام تلاش کریں...", key="ss")
             if search: df = df[df.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
             st.dataframe(df, use_container_width=True)
 
-# === C. KHARCHA ===
-elif "Kharcha" in selected_tab:
-    st.header("💸 Daily Kharcha (Expenses)")
+# === C. KHARCHA (URDU) ===
+elif "اخراجات" in selected_tab:
+    st.markdown("<h2 style='text-align:right;'>💸 روزانہ خرچہ</h2>", unsafe_allow_html=True)
     with st.form("exp"):
-        cat = st.selectbox("Kharcha Type", ["Dukan (Shop Expense)", "Imran Ali (Personal)", "Salman Khan (Personal)"])
-        c1, c2 = st.columns(2); amt = c1.number_input("Amount (Raqam)", min_value=0); det = c2.text_input("Details")
-        if st.form_submit_button("💾 Save Expense"):
+        cat = st.selectbox("خرچے کی قسم", ["دکان کا خرچہ", "عمران علی (ذاتی)", "سلمان خان (ذاتی)"])
+        c1, c2 = st.columns(2); det = c1.text_input("تفصیل"); amt = c2.number_input("رقم", min_value=0)
+        
+        if st.form_submit_button("💾 خرچہ محفوظ کریں"):
             date = datetime.now(pytz.timezone('Asia/Karachi')).strftime("%Y-%m-%d")
             if save_data("Expenses", [date, cat, amt, det]):
-                st.success("Saved!"); time.sleep(1); st.rerun()
-    st.subheader("📜 Today's Expenses")
+                st.success("محفوظ ہو گیا!"); time.sleep(1); st.rerun()
+    st.subheader("📜 آج کے اخراجات")
     df = load_data("Expenses")
     if not df.empty:
         st.dataframe(df, use_container_width=True)
-        st.markdown(f"<div style='background:#fee2e2; color:#b91c1c; padding:10px; border-radius:8px; font-weight:bold; text-align:center;'>Total Kharcha: Rs {df['Amount'].sum():,.0f}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background:#fee2e2; color:#b91c1c; padding:10px; border-radius:8px; font-weight:bold; text-align:center;'>کل خرچہ: Rs {df['Amount'].sum():,.0f}</div>", unsafe_allow_html=True)
 
-# === D. CLOSING ===
-elif "Closing" in selected_tab:
-    st.header("📒 Munafa & Hisaab")
+# === D. CLOSING (URDU) ===
+elif "کلوزنگ" in selected_tab:
+    st.markdown("<h2 style='text-align:right;'>📒 منافع اور حساب کتاب</h2>", unsafe_allow_html=True)
     b = load_data("Purchase"); s = load_data("Sale"); e = load_data("Expenses")
+    
     buy_sum = b["Amount"].sum() if not b.empty else 0
     sell_sum = s["Amount"].sum() if not s.empty else 0
     buy_w = b["Weight"].sum() if not b.empty else 0
     sell_w = s["Weight"].sum() if not s.empty else 0
     
-    shop_exp = e[e["Category"] == "Dukan (Shop Expense)"]["Amount"].sum() if not e.empty else 0
-    imran = e[e["Category"] == "Imran Ali (Personal)"]["Amount"].sum() if not e.empty else 0
-    salman = e[e["Category"] == "Salman Khan (Personal)"]["Amount"].sum() if not e.empty else 0
+    # Updated Logic to Handle both English & Urdu Expenses
+    shop_exp = e[e["Category"].isin(["Dukan (Shop Expense)", "دکان کا خرچہ"])]["Amount"].sum() if not e.empty else 0
+    imran = e[e["Category"].isin(["Imran Ali (Personal)", "عمران علی (ذاتی)"])]["Amount"].sum() if not e.empty else 0
+    salman = e[e["Category"].isin(["Salman Khan (Personal)", "سلمان خان (ذاتی)"])]["Amount"].sum() if not e.empty else 0
     
     gross = sell_sum - buy_sum
     net = gross - shop_exp
@@ -281,18 +319,19 @@ elif "Closing" in selected_tab:
     cash = net - (imran + salman)
     
     c1,c2,c3 = st.columns(3)
-    c1.markdown(f"<div class='metric-card'><div class='metric-label'>Stock in Hand</div><div class='metric-value'>{stock:,.1f} Kg</div></div>", unsafe_allow_html=True)
-    c2.markdown(f"<div class='metric-card'><div class='metric-label'>Gross Profit</div><div class='metric-value'>Rs {gross:,.0f}</div></div>", unsafe_allow_html=True)
-    c3.markdown(f"<div class='metric-card' style='border-left-color:#d32f2f;'><div class='metric-label'>Shop Expense</div><div class='metric-value' style='color:#d32f2f !important;'>- {shop_exp:,.0f}</div></div>", unsafe_allow_html=True)
+    c1.markdown(f"<div class='metric-card'><div class='metric-label'>اسٹاک (Stock)</div><div class='metric-value'>{stock:,.1f} Kg</div></div>", unsafe_allow_html=True)
+    c2.markdown(f"<div class='metric-card'><div class='metric-label'>کاروباری منافع</div><div class='metric-value'>Rs {gross:,.0f}</div></div>", unsafe_allow_html=True)
+    c3.markdown(f"<div class='metric-card' style='border-right-color:#d32f2f;'><div class='metric-label'>دکان خرچہ</div><div class='metric-value' style='color:#d32f2f !important;'>- {shop_exp:,.0f}</div></div>", unsafe_allow_html=True)
     st.markdown("---")
-    st.markdown(f"<h2 style='text-align:center; color:#2e7d32;'>✅ Net Profit: Rs {net:,.0f}</h2>", unsafe_allow_html=True)
-    st.markdown("### 👥 Partners Drawings")
+    st.markdown(f"<h2 style='text-align:center; color:#2e7d32;'>✅ صاف منافع: {net:,.0f} روپے</h2>", unsafe_allow_html=True)
+    st.markdown("### 👥 پارٹنرز کا کھاتہ")
     cc1, cc2 = st.columns(2)
-    cc1.info(f"Imran Ali: Rs {imran:,.0f}")
-    cc2.info(f"Salman Khan: Rs {salman:,.0f}")
-    st.success(f"💵 **Net Cash in Hand:** Rs {cash:,.0f}")
+    cc1.info(f"عمران علی نے لیے: {imran:,.0f}")
+    cc2.info(f"سلمان خان نے لیے: {salman:,.0f}")
+    st.success(f"💵 **نیٹ کیش (بقیہ روکڑا):** {cash:,.0f} روپے")
 
-elif "Users" in selected_tab:
+elif "یوزرز" in selected_tab:
+    st.header("👥 یوزرز مینیجمنٹ")
     u=st.text_input("New User"); p=st.text_input("Pass")
     if st.button("Create"): 
         try: get_connection().worksheet("Users").append_row([u,p]); st.success("Done")
