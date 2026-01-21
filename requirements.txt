@@ -5,3 +5,4 @@ google-auth
 firebase-admin
 pytz
 requests
+extra-streamlit-components
