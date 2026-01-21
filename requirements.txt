@@ -1,5 +1,7 @@
 streamlit
 pandas
+firebase-admin
 gspread
 google-auth
+st-gsheets-connection
 pytz
