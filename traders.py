@@ -1,6 +1,4 @@
 import streamlit as st
-import gspread
-st.sidebar.warning(f"Gspread Version: {gspread.__version__}")
 import pandas as pd
 from datetime import datetime
 import pytz 
@@ -11,293 +9,187 @@ import time
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="SI Traders", page_icon="⚖️", layout="wide")
 
+# CSS Setup
 st.markdown("""
     <style>
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        header {visibility: hidden;}
         .stApp { background-color: #f4f6f9; }
-        .metric-card {
-            background-color: white; padding: 15px; border-radius: 10px;
-            box-shadow: 2px 2px 5px rgba(0,0,0,0.1); text-align: center;
-            border-left: 5px solid #2e7d32;
-        }
+        .metric-card { background: white; padding: 15px; border-radius: 10px; border-left: 5px solid #2e7d32; box-shadow: 2px 2px 5px rgba(0,0,0,0.1); text-align: center; }
         .sale-card { border-left: 5px solid #c62828; }
         .metric-title { font-size: 14px; color: #555; }
         .metric-value { font-size: 24px; font-weight: bold; color: #000; }
-        
-        @media print {
-            body * { visibility: hidden; }
-            .invoice-box, .invoice-box * { visibility: visible; }
-            .invoice-box { position: absolute; left: 0; top: 0; width: 100%; }
-            [data-testid="stSidebar"] { display: none; }
-        }
-        .invoice-box {
-            max-width: 800px; margin: auto; padding: 30px; border: 1px solid #eee;
-            box-shadow: 0 0 10px rgba(0, 0, 0, .15); font-size: 16px;
-            line-height: 24px; font-family: 'Helvetica Neue', 'Helvetica', Helvetica, Arial, sans-serif;
-            color: #555; background-color: white;
-        }
-        .invoice-table { width: 100%; line-height: inherit; text-align: left; border-collapse: collapse; }
-        .invoice-table td { padding: 5px; vertical-align: top; }
-        .invoice-table tr.heading td { background: #eee; border-bottom: 1px solid #ddd; font-weight: bold; }
-        .invoice-table tr.total td { border-top: 2px solid #eee; font-weight: bold; }
+        .invoice-box { background: white; padding: 30px; border: 1px solid #eee; }
+        @media print { [data-testid="stSidebar"] { display: none; } .invoice-box { position: absolute; top: 0; left: 0; width: 100%; } }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. CONNECTION ---
-def get_connection():
-    if "service_account" not in st.secrets:
-        st.error("🚨 Error: Secrets file check karein.")
-        st.stop()
-    
-    creds_dict = dict(st.secrets["service_account"])
-    if "private_key" in creds_dict:
-        # Key Cleaning
-        if creds_dict["private_key"].startswith("\\"):
-            creds_dict["private_key"] = creds_dict["private_key"][1:]
-        creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+# --- 2. DIAGNOSIS (SIDEBAR) ---
+st.sidebar.info(f"⚙️ Library Version: {gspread.__version__}")
+if st.sidebar.button("🛠️ Run Diagnostics"):
+    try:
+        st.sidebar.write("Connecting...")
+        creds_dict = dict(st.secrets["service_account"])
+        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        client = gspread.authorize(creds)
+        st.sidebar.success("Connected!")
+        
+        ws = client.open("SI Traders Data").worksheet("Purchase")
+        st.sidebar.write("Fetching Data...")
+        data = ws.get("A:Z") # Alternative method
+        st.sidebar.success(f"Data Found: {len(data)} rows")
+        st.sidebar.write(data)
+    except Exception as e:
+        st.sidebar.error(f"Fail: {e}")
 
+# --- 3. CONNECTION ---
+def get_connection():
+    if "service_account" not in st.secrets: st.error("Secrets Missing"); st.stop()
+    creds_dict = dict(st.secrets["service_account"])
+    # Key Fixer
+    if "private_key" in creds_dict:
+        if creds_dict["private_key"].startswith("\\"): creds_dict["private_key"] = creds_dict["private_key"][1:]
+        creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+    
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
-    client = gspread.authorize(creds)
-    return client.open("SI Traders Data")
+    return gspread.authorize(creds).open("SI Traders Data")
 
-# --- 3. HELPER FUNCTIONS ---
-def get_worksheet_safe(client, tab_name):
-    try: return client.worksheet(tab_name)
-    except: 
-        try: return client.worksheet(tab_name + "s") # Try plural
-        except: return None
-
+# --- 4. HELPERS ---
 def get_users():
-    try: 
-        client = get_connection()
-        ws = get_worksheet_safe(client, "Users") or get_worksheet_safe(client, "User")
-        if not ws: return pd.DataFrame()
-        
-        data = ws.get_all_values()
-        if len(data) < 2: return pd.DataFrame()
+    try:
+        ws = get_connection().worksheet("Users")
+        data = ws.get("A:C") # Using .get() instead of get_all_records
+        if not data: return pd.DataFrame()
         headers = data.pop(0)
         return pd.DataFrame(data, columns=headers)
     except: return pd.DataFrame()
 
-# 🔥 ROBUST LOAD DATA (No 200 Error)
 def load_data(tab):
     try:
-        client = get_connection()
-        ws = get_worksheet_safe(client, tab)
-        if not ws: return pd.DataFrame()
-        
-        # Use get_all_values instead of records
-        raw_data = ws.get_all_values()
+        ws = get_connection().worksheet(tab)
+        # 🔥 ALTERNATIVE FETCH METHOD (Bypasses 200 Error)
+        raw_data = ws.get("A:H") 
         
         if not raw_data: return pd.DataFrame()
-
-        headers = raw_data.pop(0) # First row is header
+        
+        headers = raw_data.pop(0)
         df = pd.DataFrame(raw_data, columns=headers)
         
-        # Convert Numbers
-        for col in ["Weight", "Rate", "Amount"]:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        # Numbers Conversion
+        for c in ["Weight", "Rate", "Amount"]:
+            if c in df.columns: df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0)
             
-        # Filter Logic
-        if not df.empty and "Owner" in df.columns:
-            if st.session_state["user_role"] != "Admin":
-                df = df[df["Owner"] == st.session_state["username"]]
-                
+        # Admin Filter
+        if "Owner" in df.columns and st.session_state["user_role"] != "Admin":
+            df = df[df["Owner"] == st.session_state["username"]]
+            
         return df
     except Exception as e:
-        # 🔥 SILENT SUCCESS: Agar 200 error aye, tu ignore karo (Data load failed but app wont crash)
-        if "200" in str(e): return pd.DataFrame()
-        st.error(f"History Error ({tab}): {e}")
+        if "200" in str(e): return pd.DataFrame() # Ignore glitch
+        st.error(f"Load Error ({tab}): {e}")
         return pd.DataFrame()
 
 def save_data(tab, row_data):
     try:
-        client = get_connection()
-        ws = get_worksheet_safe(client, tab)
-        if not ws: st.error(f"Sheet '{tab}' nahi mili."); return False
-        
-        full_row = [st.session_state["username"]] + row_data
-        ws.append_row(full_row)
+        ws = get_connection().worksheet(tab)
+        ws.append_row([st.session_state["username"]] + row_data)
         return True
     except Exception as e:
-        # 🔥 SILENT SUCCESS: Agar 200 aye tu True return karo
-        if "200" in str(e): return True
+        if "200" in str(e): return True # Ignore glitch
         st.error(f"Save Error: {e}")
         return False
 
-# --- 4. LOGIN SYSTEM ---
-if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
-if "username" not in st.session_state: st.session_state["username"] = ""
-if "user_role" not in st.session_state: st.session_state["user_role"] = "User"
+# --- 5. LOGIN ---
+if "logged_in" not in st.session_state: st.session_state.update({"logged_in": False, "username": "", "user_role": "User"})
 
 if not st.session_state["logged_in"]:
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
-        st.markdown("## ⚖️ SI Traders Login")
-        with st.form("login_form"):
-            u = st.text_input("Username")
-            p = st.text_input("Password", type="password")
-            if st.form_submit_button("Login"):
-                if u == "admin" and p == "admin123":
-                    st.session_state["logged_in"] = True
-                    st.session_state["username"] = "Admin"
-                    st.session_state["user_role"] = "Admin"
-                    st.rerun()
-                
-                users = get_users()
-                if not users.empty:
-                    match = users[(users["Username"].astype(str) == u) & (users["Password"].astype(str) == p)]
-                    if not match.empty:
-                        st.session_state["logged_in"] = True
-                        st.session_state["username"] = u
-                        st.session_state["user_role"] = "User"
-                        st.rerun()
-                    else: st.error("Wrong ID/Pass")
-                else: st.error("User list empty (Check Sheet)")
+        st.title("⚖️ Login")
+        u = st.text_input("User"); p = st.text_input("Pass", type="password")
+        if st.button("Login"):
+            if u=="admin" and p=="admin123":
+                st.session_state.update({"logged_in":True, "username":"Admin", "user_role":"Admin"}); st.rerun()
+            
+            users = get_users()
+            if not users.empty:
+                match = users[(users["Username"]==u) & (users["Password"]==p)]
+                if not match.empty:
+                    st.session_state.update({"logged_in":True, "username":u, "user_role":"User"}); st.rerun()
+                else: st.error("Invalid Credentials")
+            else: st.error("No Users Found (Check Sheet)")
     st.stop()
 
-# --- 5. MAIN APP ---
-st.sidebar.markdown(f"### 👤 {st.session_state['username']}")
-if st.sidebar.button("Logout"):
-    st.session_state["logged_in"] = False
-    st.rerun()
+# --- 6. MAIN APP ---
+st.sidebar.title(f"👤 {st.session_state['username']}")
+if st.sidebar.button("Logout"): st.session_state["logged_in"]=False; st.rerun()
 
-st.title("⚖️ SI Traders System")
-tabs = ["🟢 Khareedari (Purchase)", "🔴 Farokht (Sale)", "📒 Closing (Profit)"]
-if st.session_state["user_role"] == "Admin": tabs.append("👥 Manage Users")
-
-active_tab = st.radio("Menu", tabs, horizontal=True, label_visibility="collapsed")
-st.markdown("---")
+tabs = ["🟢 Khareedari", "🔴 Farokht", "📒 Closing"]
+if st.session_state["user_role"] == "Admin": tabs.append("👥 Users")
+menu = st.radio("Menu", tabs, horizontal=True)
+st.divider()
 
 if "invoice_data" not in st.session_state: st.session_state.invoice_data = None
 
-# === A. KHAREEDARI ===
-if "Khareedari" in active_tab:
-    st.header("🟢 Nayi Khareedari")
-    with st.form("buy_form", clear_on_submit=True):
-        c1, c2, c3 = st.columns(3)
-        party = c1.text_input("Party Name")
+# === KHAREEDARI ===
+if "Khareedari" in menu:
+    st.header("New Purchase")
+    with st.form("buy"):
+        c1,c2,c3 = st.columns(3)
+        party = c1.text_input("Party")
         w_col, u_col = c2.columns([2,1])
-        raw_weight = w_col.number_input("Wazan", min_value=0.0, format="%.3f")
-        unit = u_col.selectbox("Unit", ["Kg", "Grams"])
-        rate = c3.number_input("Rate (Per Kg)", min_value=0)
-        details = st.text_input("Tafseel")
-        
-        final_weight_kg = raw_weight if unit == "Kg" else raw_weight / 1000
-        total_amt = final_weight_kg * rate
-        st.markdown(f"### 💰 Total: Rs {total_amt:,.0f} <span style='font-size:14px; color:grey'>({final_weight_kg} Kg)</span>", unsafe_allow_html=True)
-        
-        if st.form_submit_button("📥 Save Purchase"):
-            pk_time = datetime.now(pytz.timezone('Asia/Karachi')).strftime("%Y-%m-%d %H:%M")
-            # Save data (Ignore 200 error)
-            if save_data("Purchase", [pk_time, party, final_weight_kg, rate, total_amt, details]):
-                st.success("Saved Successfully!")
-                time.sleep(1)
-                st.rerun()
-
-    st.subheader("📜 Aaj ki Khareedari (History)")
+        w = w_col.number_input("Weight", format="%.3f"); unit = u_col.selectbox("Unit", ["Kg", "Grams"])
+        r = c3.number_input("Rate")
+        det = st.text_input("Details")
+        fw = w if unit=="Kg" else w/1000
+        total = fw*r
+        st.markdown(f"### Total: {total:,.0f}")
+        if st.form_submit_button("Save"):
+            date = datetime.now(pytz.timezone('Asia/Karachi')).strftime("%Y-%m-%d")
+            if save_data("Purchase", [date, party, fw, r, total, det]):
+                st.success("Saved!"); time.sleep(1); st.rerun()
+    
+    st.subheader("History")
     df = load_data("Purchase")
     if not df.empty:
-        st.dataframe(df.tail(10), use_container_width=True)
-        t_w = df["Weight"].sum() if "Weight" in df.columns else 0
-        t_a = df["Amount"].sum() if "Amount" in df.columns else 0
-        c1, c2 = st.columns(2)
-        c1.info(f"Total Wazan: {t_w:,.3f} Kg")
-        c2.info(f"Total Raqam: Rs {t_a:,.0f}")
-    else:
-        st.info("No data found (or loading failed).")
+        st.dataframe(df)
+        c1,c2 = st.columns(2)
+        c1.info(f"Total Weight: {df['Weight'].sum():,.3f}")
+        c2.info(f"Total Amount: {df['Amount'].sum():,.0f}")
+    else: st.warning("No data found.")
 
-# === B. FAROKHT ===
-elif "Farokht" in active_tab:
+# === FAROKHT ===
+elif "Farokht" in menu:
     if st.session_state.invoice_data:
-        data = st.session_state.invoice_data
-        st.button("🔙 Back to Form", on_click=lambda: st.session_state.pop("invoice_data"))
-        inv_html = f"""
-        <div class="invoice-box">
-            <div style="text-align:center; margin-bottom:20px;">
-                <h2>SI TRADERS</h2>
-                <p>Deals in: All Kinds of Scrap</p>
-            </div>
-            <hr>
-            <table style="width:100%">
-                <tr><td><b>Bill No:</b> {data['bill']}</td><td style="text-align:right"><b>Date:</b> {data['date']}</td></tr>
-                <tr><td><b>Customer:</b> {data['cust']}</td><td style="text-align:right"></td></tr>
-            </table>
-            <br>
-            <table class="invoice-table">
-                <tr class="heading"><td>Item</td><td>Weight</td><td>Rate</td><td>Amount</td></tr>
-                <tr class="item"><td>{data['details']}</td><td>{data['weight']} Kg</td><td>{data['rate']}</td><td>{data['amount']}</td></tr>
-                <tr class="total"><td></td><td></td><td>Total:</td><td>Rs {data['amount']}</td></tr>
-            </table>
-        </div>
-        """
-        st.markdown(inv_html, unsafe_allow_html=True)
-        st.info("💡 Ctrl + P to Print")
+        d = st.session_state.invoice_data
+        st.button("Back", on_click=lambda: st.session_state.pop("invoice_data"))
+        st.markdown(f"""<div class='invoice-box'><center><h2>SI TRADERS</h2></center><hr><p><b>Bill:</b> {d['bill']} | <b>Customer:</b> {d['cust']}</p><table width='100%'><tr><td><b>Item</b></td><td><b>Weight</b></td><td><b>Rate</b></td><td><b>Total</b></td></tr><tr><td>{d['det']}</td><td>{d['w']}</td><td>{d['r']}</td><td>{d['a']}</td></tr></table></div>""", unsafe_allow_html=True)
     else:
-        st.header("🔴 Nayi Farokht")
-        with st.form("sell_form"):
-            c1, c2 = st.columns(2)
-            cust = c1.text_input("Customer Name")
-            bill = c2.text_input("Bill No")
-            c3, c4 = st.columns(2)
-            w_col, u_col = c3.columns([2,1])
-            raw_weight = w_col.number_input("Wazan", min_value=0.0, format="%.3f")
-            unit = u_col.selectbox("Unit", ["Kg", "Grams"])
-            rate = c4.number_input("Rate (Per Kg)", min_value=0)
-            details = st.text_input("Details")
-            
-            final_weight_kg = raw_weight if unit == "Kg" else raw_weight / 1000
-            total_amt = final_weight_kg * rate
-            st.markdown(f"### 💰 Bill: Rs {total_amt:,.0f}", unsafe_allow_html=True)
-            
-            if st.form_submit_button("🖨️ Save & Print"):
-                pk_time = datetime.now(pytz.timezone('Asia/Karachi')).strftime("%Y-%m-%d %H:%M")
-                if save_data("Sale", [pk_time, cust, bill, final_weight_kg, rate, total_amt, details]):
-                    st.session_state.invoice_data = {
-                        "date": pk_time, "cust": cust, "bill": bill,
-                        "weight": final_weight_kg, "rate": rate,
-                        "amount": f"{total_amt:,.0f}", "details": details or "Item"
-                    }
+        st.header("New Sale")
+        with st.form("sell"):
+            c1,c2 = st.columns(2); cust=c1.text_input("Customer"); bill=c2.text_input("Bill No")
+            c3,c4 = st.columns(2); w_col, u_col = c3.columns([2,1]); w=w_col.number_input("Weight", format="%.3f"); unit=u_col.selectbox("Unit", ["Kg","Grams"]); r=c4.number_input("Rate")
+            det = st.text_input("Details")
+            fw = w if unit=="Kg" else w/1000
+            total = fw*r
+            st.markdown(f"### Bill: {total:,.0f}")
+            if st.form_submit_button("Save & Print"):
+                date = datetime.now(pytz.timezone('Asia/Karachi')).strftime("%Y-%m-%d")
+                if save_data("Sale", [date, cust, bill, fw, r, total, det]):
+                    st.session_state.invoice_data = {"date":date, "cust":cust, "bill":bill, "w":fw, "r":r, "a":f"{total:,.0f}", "det":det}
                     st.rerun()
-
-        st.subheader("📜 Aaj ki Farokht")
+        st.subheader("History")
         df = load_data("Sale")
-        if not df.empty:
-            st.dataframe(df.tail(10), use_container_width=True)
+        if not df.empty: st.dataframe(df)
 
-# === C. CLOSING ===
-elif "Closing" in active_tab:
-    st.header("📒 Profit Report")
-    df_b = load_data("Purchase")
-    df_s = load_data("Sale")
-    
-    b_w = df_b["Weight"].sum() if not df_b.empty else 0
-    b_a = df_b["Amount"].sum() if not df_b.empty else 0
-    s_w = df_s["Weight"].sum() if not df_s.empty else 0
-    s_a = df_s["Amount"].sum() if not df_s.empty else 0
-    
-    net_w = s_w - b_w
-    net_p = s_a - b_a
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Stock", f"{net_w:,.3f} Kg")
-    c2.metric("Profit", f"Rs {net_p:,.0f}")
-    c3.metric("Avg Rate", f"{(net_p/net_w):.1f}" if net_w!=0 else "0")
+# === CLOSING ===
+elif "Closing" in menu:
+    b=load_data("Purchase"); s=load_data("Sale")
+    nw = s["Weight"].sum() - b["Weight"].sum() if not s.empty and not b.empty else 0
+    np = s["Amount"].sum() - b["Amount"].sum() if not s.empty and not b.empty else 0
+    c1,c2=st.columns(2); c1.metric("Stock", f"{nw:,.3f} Kg"); c2.metric("Profit", f"Rs {np:,.0f}")
 
-elif "Manage Users" in active_tab:
-    st.header("👥 Users")
-    with st.form("add_u"):
-        u = st.text_input("Username")
-        p = st.text_input("Password")
-        if st.form_submit_button("Create"):
-            try:
-                client = get_connection()
-                get_worksheet_safe(client, "Users").append_row([u, p])
-                st.success("Created!")
-            except Exception as e:
-                if "200" in str(e): st.success("Created!")
-                else: st.error(f"Error: {e}")
-    st.dataframe(get_users(), use_container_width=True)
+elif "Users" in menu:
+    u=st.text_input("User"); p=st.text_input("Pass")
+    if st.button("Create"): get_connection().worksheet("Users").append_row([u,p]); st.success("Done")
+    st.dataframe(get_users())
