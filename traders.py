@@ -19,7 +19,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. CONNECTION (FIXED ID) ---
+# --- 2. CONNECTION ---
 def get_connection():
     if "service_account" not in st.secrets: st.error("Secrets Missing"); st.stop()
     creds = dict(st.secrets["service_account"])
@@ -30,11 +30,8 @@ def get_connection():
     creds = Credentials.from_service_account_info(creds, scopes=scope)
     client = gspread.authorize(creds)
     
-    # 🔥 CORRECTED SHEET ID (Case Sensitive)
-    # Pichli baar 'n' chota tha, ab 'N' bara hai.
-    sheet_id = "1SQUMvySccNWz_G3ziZmiFB9Ry2thjxdnNGWvhppv-dE"
-    
-    return client.open_by_key(sheet_id)
+    # 🔥 FIX: Sheet ka naam "Trade" hai (Screenshot ke mutabiq)
+    return client.open("Trade")
 
 # --- 3. HELPER FUNCTIONS ---
 def get_worksheet_safe(client, tab_name):
@@ -81,7 +78,7 @@ def save_data(tab, row_data):
     try:
         client = get_connection()
         ws = get_worksheet_safe(client, tab)
-        if not ws: st.error(f"Sheet '{tab}' nahi mili (Check Spelling)."); return False
+        if not ws: st.error(f"Sheet '{tab}' nahi mili."); return False
         
         full_row = [st.session_state["username"]] + row_data
         ws.append_row(full_row)
