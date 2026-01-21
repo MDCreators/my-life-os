@@ -9,13 +9,16 @@ import time
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="SI Traders", page_icon="⚖️", layout="wide")
 
+# CSS Styling (Urdu Font Support)
 st.markdown("""
     <style>
-        .stApp { background-color: #f4f6f9; }
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=swap');
+        .stApp { background-color: #f4f6f9; font-family: 'Noto Nastaliq Urdu', sans-serif; }
+        h1, h2, h3, .stButton button, .stRadio label { font-family: 'Noto Nastaliq Urdu', sans-serif; }
+        
         .metric-card { background: white; padding: 15px; border-radius: 10px; border-left: 5px solid #2e7d32; box-shadow: 2px 2px 5px rgba(0,0,0,0.1); text-align: center; }
         .expense-card { border-left: 5px solid #d32f2f; }
         .invoice-box { background: white; padding: 30px; border: 1px solid #eee; }
-        .search-box input { border: 2px solid #2e7d32; border-radius: 5px; }
         @media print { [data-testid="stSidebar"] { display: none; } .invoice-box { position: absolute; top: 0; left: 0; width: 100%; } }
     </style>
 """, unsafe_allow_html=True)
@@ -30,8 +33,9 @@ def get_connection():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     creds = Credentials.from_service_account_info(creds, scopes=scope)
     client = gspread.authorize(creds)
-    # Sheet Name: Trade
-    return client.open("Trade")
+    # Correct Sheet ID from previous fix
+    sheet_id = "1SQUMvySccNWz_G3ziZmiFB9Ry2thjxdnNGWvhppv-dE"
+    return client.open_by_key(sheet_id)
 
 # --- 3. HELPER FUNCTIONS ---
 def get_worksheet_safe(client, tab_name):
@@ -63,7 +67,6 @@ def load_data(tab):
         headers = raw_data.pop(0)
         df = pd.DataFrame(raw_data, columns=headers)
         
-        # Numeric Conversion
         for c in ["Weight", "Rate", "Amount"]:
             if c in df.columns: df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0)
             
@@ -113,103 +116,102 @@ if not st.session_state["logged_in"]:
 st.sidebar.title(f"👤 {st.session_state['username']}")
 if st.sidebar.button("Logout"): st.session_state["logged_in"]=False; st.rerun()
 
-# Updated Menu with Urdu
-tabs = ["🟢 Khareedari", "🔴 Farokht", "💸 Kharcha (Expense)", "📒 Closing"]
+# --- URDU MENU ---
+tabs = ["🟢 خریداری", "🔴 فروخت", "💸 اخراجات", "📒 کلوزنگ"]
 if st.session_state["user_role"] == "Admin": tabs.append("👥 Users")
-menu = st.radio("Menu", tabs, horizontal=True)
+menu = st.radio("مینو", tabs, horizontal=True, label_visibility="collapsed")
 st.divider()
 
 if "invoice_data" not in st.session_state: st.session_state.invoice_data = None
 
-# === A. KHAREEDARI ===
-if "Khareedari" in menu:
-    st.header("🛒 Nayi Khareedari (New Purchase)")
+# === A. KHAREEDARI (PURCHASE) ===
+if "خریداری" in menu:
+    st.header("🛒 نئی خریداری")
     with st.form("buy"):
         c1,c2,c3 = st.columns(3)
-        party = c1.text_input("Party Name (Naam)")
+        party = c1.text_input("پارٹی کا نام")
         w_col, u_col = c2.columns([2,1])
-        w = w_col.number_input("Wazan (Weight)", format="%.3f"); unit = u_col.selectbox("Unit", ["Kg", "Grams"])
-        r = c3.number_input("Rate (Bhaao)")
-        det = st.text_input("Tafseel (Details)")
+        w = w_col.number_input("وزن", format="%.3f"); unit = u_col.selectbox("یونٹ", ["Kg", "Grams"])
+        r = c3.number_input("ریٹ")
+        det = st.text_input("تفصیل")
         fw = w if unit=="Kg" else w/1000
         total = fw*r
-        st.markdown(f"### 💰 Total: Rs {total:,.0f}")
-        if st.form_submit_button("📥 Save Purchase"):
+        st.markdown(f"### 💰 کل رقم: {total:,.0f}")
+        if st.form_submit_button("📥 خریداری محفوظ کریں"):
             date = datetime.now(pytz.timezone('Asia/Karachi')).strftime("%Y-%m-%d")
             if save_data("Purchase", [date, party, fw, r, total, det]):
-                st.success("Saved!"); time.sleep(1); st.rerun()
+                st.success("محفوظ ہو گیا!"); time.sleep(1); st.rerun()
     
-    st.subheader("📜 Khareedari History")
+    st.subheader("📜 خریداری کی ہسٹری")
     df = load_data("Purchase")
     if not df.empty:
         # SEARCH BAR
-        search = st.text_input("🔍 Search Party Name...", key="search_buy")
+        search = st.text_input("🔍 پارٹی تلاش کریں...", key="search_buy")
         if search:
             df = df[df.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
         
         st.dataframe(df, use_container_width=True)
         c1,c2 = st.columns(2)
-        c1.info(f"Total Wazan: {df['Weight'].sum():,.3f} Kg")
-        c2.info(f"Total Raqam: Rs {df['Amount'].sum():,.0f}")
-    else: st.warning("No data found.")
+        c1.info(f"کل وزن: {df['Weight'].sum():,.3f} Kg")
+        c2.info(f"کل رقم: Rs {df['Amount'].sum():,.0f}")
+    else: st.warning("کوئی ڈیٹا موجود نہیں۔")
 
-# === B. FAROKHT ===
-elif "Farokht" in menu:
+# === B. FAROKHT (SALE) ===
+elif "فروخت" in menu:
     if st.session_state.invoice_data:
         d = st.session_state.invoice_data
-        st.button("🔙 Back", on_click=lambda: st.session_state.pop("invoice_data"))
-        st.markdown(f"""<div class='invoice-box'><center><h2>SI TRADERS</h2></center><hr><p><b>Bill:</b> {d['bill']} | <b>Customer:</b> {d['cust']}</p><table width='100%'><tr><td><b>Item</b></td><td><b>Weight</b></td><td><b>Rate</b></td><td><b>Total</b></td></tr><tr><td>{d['det']}</td><td>{d['w']}</td><td>{d['r']}</td><td>{d['a']}</td></tr></table></div>""", unsafe_allow_html=True)
+        st.button("🔙 واپس", on_click=lambda: st.session_state.pop("invoice_data"))
+        st.markdown(f"""<div class='invoice-box' style='direction: rtl; text-align: right;'><center><h2>SI TRADERS</h2></center><hr><p><b>بل نمبر:</b> {d['bill']} | <b>کسٹمر:</b> {d['cust']}</p><table width='100%' style='text-align: right;'><tr><td><b>آئٹم</b></td><td><b>وزن</b></td><td><b>ریٹ</b></td><td><b>رقم</b></td></tr><tr><td>{d['det']}</td><td>{d['w']}</td><td>{d['r']}</td><td>{d['a']}</td></tr></table></div>""", unsafe_allow_html=True)
     else:
-        st.header("🏷️ Nayi Farokht (New Sale)")
+        st.header("🏷️ نئی فروخت")
         with st.form("sell"):
-            c1,c2 = st.columns(2); cust=c1.text_input("Customer Name"); bill=c2.text_input("Bill No")
-            c3,c4 = st.columns(2); w_col, u_col = c3.columns([2,1]); w=w_col.number_input("Wazan", format="%.3f"); unit=u_col.selectbox("Unit", ["Kg","Grams"]); r=c4.number_input("Rate")
-            det = st.text_input("Tafseel")
+            c1,c2 = st.columns(2); cust=c1.text_input("کسٹمر کا نام"); bill=c2.text_input("بل نمبر")
+            c3,c4 = st.columns(2); w_col, u_col = c3.columns([2,1]); w=w_col.number_input("وزن", format="%.3f"); unit=u_col.selectbox("یونٹ", ["Kg","Grams"]); r=c4.number_input("ریٹ")
+            det = st.text_input("تفصیل")
             fw = w if unit=="Kg" else w/1000
             total = fw*r
-            st.markdown(f"### Bill: Rs {total:,.0f}")
-            if st.form_submit_button("🖨️ Save & Print"):
+            st.markdown(f"### بل: {total:,.0f}")
+            if st.form_submit_button("🖨️ محفوظ کریں اور پرنٹ"):
                 date = datetime.now(pytz.timezone('Asia/Karachi')).strftime("%Y-%m-%d")
                 if save_data("Sale", [date, cust, bill, fw, r, total, det]):
                     st.session_state.invoice_data = {"date":date, "cust":cust, "bill":bill, "w":fw, "r":r, "a":f"{total:,.0f}", "det":det}
                     st.rerun()
         
-        st.subheader("📜 Farokht History")
+        st.subheader("📜 فروخت کی ہسٹری")
         df = load_data("Sale")
         if not df.empty:
             # SEARCH BAR
-            search = st.text_input("🔍 Search Customer / Bill...", key="search_sell")
+            search = st.text_input("🔍 کسٹمر / بل تلاش کریں...", key="search_sell")
             if search:
                 df = df[df.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
             
             st.dataframe(df, use_container_width=True)
 
-# === C. EXPENSES (NEW FEATURE) ===
-elif "Expense" in menu:
-    st.header("💸 Kharcha Entry")
+# === C. EXPENSES (URDU) ===
+elif "اخراجات" in menu:
+    st.header("💸 اخراجات کا اندراج")
     with st.form("exp"):
         c1, c2 = st.columns(2)
-        # Dropdown for Partners & Shop
-        cat = c1.selectbox("Kharcha Type", ["Dukan (Shop Expense)", "Imran Ali (Personal)", "Salman Khan (Personal)"])
-        amt = c2.number_input("Raqam (Amount)", min_value=0)
-        det = st.text_input("Tafseel (Details)", placeholder="Chaye, Bill, etc.")
+        # Dropdown in Urdu
+        cat = c1.selectbox("خرچہ کی قسم", ["دکان کے اخراجات", "عمران علی (ذاتی)", "سلمان خان (ذاتی)"])
+        amt = c2.number_input("رقم", min_value=0)
+        det = st.text_input("تفصیل (مثلاً: چائے، بجلی کا بل)", placeholder="تفصیل لکھیں...")
         
-        if st.form_submit_button("💾 Save Kharcha"):
+        if st.form_submit_button("💾 خرچہ محفوظ کریں"):
             date = datetime.now(pytz.timezone('Asia/Karachi')).strftime("%Y-%m-%d")
             if save_data("Expenses", [date, cat, amt, det]):
-                st.success("Expense Saved!")
-                time.sleep(1); st.rerun()
+                st.success("خرچہ محفوظ ہو گیا!"); time.sleep(1); st.rerun()
     
-    st.subheader("📜 Kharcha List")
+    st.subheader("📜 اخراجات کی فہرست")
     df = load_data("Expenses")
     if not df.empty:
         st.dataframe(df, use_container_width=True)
         total_exp = df["Amount"].sum()
-        st.error(f"Total Kharcha: Rs {total_exp:,.0f}")
+        st.error(f"کل اخراجات: Rs {total_exp:,.0f}")
 
-# === D. CLOSING ===
-elif "Closing" in menu:
-    st.header("📒 Munafa aur Hisaab (Closing)")
+# === D. CLOSING (URDU) ===
+elif "کلوزنگ" in menu:
+    st.header("📒 منافع اور حساب (Closing)")
     
     # Load All Data
     b = load_data("Purchase")
@@ -226,15 +228,15 @@ elif "Closing" in menu:
     gross_profit = sell_total - buy_total
     stock_in_hand = buy_weight - sell_weight
     
-    # Expense Breakdown
+    # Expense Breakdown (Using Urdu Labels)
     shop_exp = 0
     imran_draw = 0
     salman_draw = 0
     
     if not e.empty:
-        shop_exp = e[e["Category"] == "Dukan (Shop Expense)"]["Amount"].sum()
-        imran_draw = e[e["Category"] == "Imran Ali (Personal)"]["Amount"].sum()
-        salman_draw = e[e["Category"] == "Salman Khan (Personal)"]["Amount"].sum()
+        shop_exp = e[e["Category"] == "دکان کے اخراجات"]["Amount"].sum()
+        imran_draw = e[e["Category"] == "عمران علی (ذاتی)"]["Amount"].sum()
+        salman_draw = e[e["Category"] == "سلمان خان (ذاتی)"]["Amount"].sum()
     
     # Final Math
     net_profit = gross_profit - shop_exp
@@ -242,24 +244,24 @@ elif "Closing" in menu:
 
     # --- DISPLAY ---
     c1, c2, c3 = st.columns(3)
-    c1.metric("📦 Stock in Hand", f"{stock_in_hand:,.1f} Kg")
-    c2.metric("💰 Karobari Munafa (Gross)", f"Rs {gross_profit:,.0f}")
-    c3.metric("📉 Dukan Kharcha", f"- Rs {shop_exp:,.0f}")
+    c1.metric("📦 موجودہ اسٹاک", f"{stock_in_hand:,.1f} Kg")
+    c2.metric("💰 کاروباری منافع (Gross)", f"Rs {gross_profit:,.0f}")
+    c3.metric("📉 دکان کا خرچہ", f"- Rs {shop_exp:,.0f}")
     
     st.divider()
     
     # Net Profit Section
-    st.markdown(f"### ✅ Net Profit (Saaf Munafa): Rs {net_profit:,.0f}")
+    st.markdown(f"### ✅ صاف منافع (Net Profit): Rs {net_profit:,.0f}")
     
     st.write("---")
-    st.subheader("👥 Partners Hisaab")
+    st.subheader("👥 پارٹنرز کا حساب")
     
     # Partners Cards
     pc1, pc2 = st.columns(2)
-    pc1.info(f"👤 **Imran Ali** ne liye: Rs {imran_draw:,.0f}")
-    pc2.info(f"👤 **Salman Khan** ne liye: Rs {salman_draw:,.0f}")
+    pc1.info(f"👤 **عمران علی** نے لیے: Rs {imran_draw:,.0f}")
+    pc2.info(f"👤 **سلمان خان** نے لیے: Rs {salman_draw:,.0f}")
     
-    st.success(f"💵 **Net Cash (Baqaya Rokra):** Rs {cash_in_hand:,.0f}")
+    st.success(f"💵 **بقایا کیش (Net Cash):** Rs {cash_in_hand:,.0f}")
 
 elif "Users" in menu:
     u=st.text_input("User"); p=st.text_input("Pass")
