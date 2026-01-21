@@ -10,7 +10,7 @@ import extra_streamlit_components as stx
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="SI Traders", page_icon="⚖️", layout="wide", initial_sidebar_state="collapsed")
 
-# --- 2. HACK FOR MOBILE ICON & BRANDING REMOVAL ---
+# --- 2. CSS (WHITE LABEL + MOBILE NAV) ---
 st.markdown("""
     <link rel="apple-touch-icon" href="https://img.icons8.com/color/48/scales.png">
     <link rel="icon" type="image/png" href="https://img.icons8.com/color/48/scales.png">
@@ -21,24 +21,56 @@ st.markdown("""
         .stApp { background-color: #ffffff !important; color: #000000 !important; }
         h1, h2, h3, h4, h5, h6, p, div, span, label, li { color: #2c3e50 !important; font-family: 'Arial', sans-serif; }
         
-        /* 2. HIDE STREAMLIT HEADER, FOOTER & MENU (NUCLEAR) */
+        /* 2. HIDE BRANDING (Header/Footer/Menu) */
         header {visibility: hidden !important; height: 0px !important;}
         footer {visibility: hidden !important; height: 0px !important;}
         #MainMenu {visibility: hidden !important; display: none !important;}
         .stDeployButton {display: none !important;}
         div[data-testid="stToolbar"] {visibility: hidden !important; display: none !important;}
         div[data-testid="stDecoration"] {visibility: hidden !important; display: none !important;}
-        div[data-testid="stStatusWidget"] {visibility: hidden !important; display: none !important;}
         
-        /* 3. CARDS & UI STYLING */
+        /* 3. NAVIGATION TABS STYLING (Top Menu) */
+        div[data-testid="stRadio"] > div {
+            flex-direction: row;
+            justify-content: center;
+            background-color: #f8f9fa;
+            border-radius: 15px;
+            padding: 5px;
+            margin-bottom: 20px;
+            overflow-x: auto; /* Scroll on small phones */
+        }
+        div[data-testid="stRadio"] label {
+            background-color: transparent !important;
+            padding: 10px 15px !important;
+            border-radius: 10px !important;
+            margin: 0 2px !important;
+            cursor: pointer;
+            border: 1px solid transparent;
+        }
+        /* Active Tab Style */
+        div[data-testid="stRadio"] label[data-checked="true"] {
+            background-color: #2e7d32 !important;
+            color: white !important;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        /* Tab Text Color Override */
+        div[data-testid="stRadio"] label p {
+            font-weight: bold !important;
+            font-size: 14px !important;
+        }
+        div[data-testid="stRadio"] label[data-checked="true"] p {
+            color: white !important;
+        }
+
+        /* 4. CARDS & UI */
         .metric-card { background-color: #f8f9fa; border: 1px solid #e9ecef; padding: 15px; border-radius: 12px; border-left: 6px solid #2e7d32; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 10px; }
         .metric-value { font-size: 26px; font-weight: 800; color: #2e7d32 !important; }
         .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] > div { background-color: #f0f2f5 !important; color: #000000 !important; border: 1px solid #ced4da !important; border-radius: 8px !important; }
         .stButton>button { width: 100%; border-radius: 8px; height: 3em; font-weight: bold; border: none; background: linear-gradient(to right, #2e7d32, #1b5e20); color: white !important; }
         
-        /* 4. PRINT STYLES */
+        /* 5. PRINT */
         .invoice-box { background: white; padding: 20px; border: 2px solid #333; }
-        @media print { [data-testid="stSidebar"] { display: none; } .stApp { background: white; } .invoice-box { position: absolute; top: 0; left: 0; width: 100%; border: none; } }
+        @media print { .stApp { background: white; } .invoice-box { position: absolute; top: 0; left: 0; width: 100%; border: none; } div[data-testid="stRadio"] {display: none;} }
     </style>
 """, unsafe_allow_html=True)
 
@@ -51,6 +83,7 @@ def get_connection():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     creds = Credentials.from_service_account_info(creds, scopes=scope)
     client = gspread.authorize(creds)
+    # Correct Sheet Name
     return client.open("Trade")
 
 # --- 4. HELPERS ---
@@ -82,7 +115,6 @@ def load_data(tab):
         df = pd.DataFrame(raw_data, columns=headers)
         for c in ["Weight", "Rate", "Amount"]:
             if c in df.columns: df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0)
-        
         current_user = st.session_state.get("username")
         current_role = st.session_state.get("user_role")
         if not df.empty and "Owner" in df.columns and current_role != "Admin":
@@ -119,8 +151,7 @@ if not st.session_state["logged_in"]:
     else:
         c1, c2, c3 = st.columns([1,2,1])
         with c2:
-            st.markdown("<br><br>", unsafe_allow_html=True)
-            st.markdown("<h1 style='text-align:center;'>⚖️ SI Traders</h1>", unsafe_allow_html=True)
+            st.markdown("<br><br><h1 style='text-align:center;'>⚖️ SI Traders</h1>", unsafe_allow_html=True)
             with st.form("login_form"):
                 u = st.text_input("Username")
                 p = st.text_input("Password", type="password")
@@ -142,29 +173,33 @@ if not st.session_state["logged_in"]:
                     else: st.error("❌ User Not Found")
         st.stop()
 
-# --- 6. MAIN APP ---
-with st.sidebar:
-    st.title(f"👤 {st.session_state['username']}")
-    st.write("---")
-    tabs = ["🟢 Khareedari", "🔴 Farokht", "💸 Kharcha", "📒 Closing"]
-    if st.session_state["user_role"] == "Admin": tabs.append("👥 Users")
-    menu = st.radio("Main Menu", tabs)
-    st.write("---")
-    if st.button("🚪 Logout"): 
-        cookie_manager.delete("traders_user")
-        cookie_manager.delete("traders_role")
-        st.session_state["logged_in"]=False
-        st.rerun()
+# --- 6. MAIN APP (TOP NAVIGATION) ---
+st.markdown(f"<h3 style='text-align:center; color:#666;'>👤 {st.session_state['username']}</h3>", unsafe_allow_html=True)
+
+# URDU LABELS + TOP NAVIGATION
+tabs = ["🛒 Khareedari (Purchase)", "🏷️ Farokht (Sale)", "💸 Kharcha (Expenses)", "📒 Closing (Profit)"]
+if st.session_state["user_role"] == "Admin": tabs.append("👥 Users")
+
+# Sidebar ki jagah ab Upar Menu hoga
+selected_tab = st.radio("Navigation", tabs, horizontal=True, label_visibility="collapsed")
+
+if st.button("🚪 Logout", key="logout_top"): 
+    cookie_manager.delete("traders_user")
+    cookie_manager.delete("traders_role")
+    st.session_state["logged_in"]=False
+    st.rerun()
+
+st.write("---")
 
 if "invoice_data" not in st.session_state: st.session_state.invoice_data = None
 
 # === A. KHAREEDARI ===
-if "Khareedari" in menu:
+if "Khareedari" in selected_tab:
     st.header("🛒 Khareedari Entry")
     with st.form("buy"):
-        c1,c2 = st.columns(2); party = c1.text_input("Party Name"); r = c2.number_input("Rate", min_value=0)
-        c3, c4 = st.columns(2); w = c3.number_input("Wazan", format="%.3f"); unit = c4.selectbox("Unit", ["Kg", "Grams"])
-        det = st.text_input("Tafseel")
+        c1,c2 = st.columns(2); party = c1.text_input("Party Name (Naam)"); r = c2.number_input("Rate (Bhaao)", min_value=0)
+        c3, c4 = st.columns(2); w = c3.number_input("Wazan (Weight)", format="%.3f"); unit = c4.selectbox("Unit", ["Kg", "Grams"])
+        det = st.text_input("Tafseel (Details)")
         fw = w if unit=="Kg" else w/1000
         total = fw*r
         st.markdown(f"<h3 style='color:#2e7d32;'>Total: Rs {total:,.0f}</h3>", unsafe_allow_html=True)
@@ -173,7 +208,7 @@ if "Khareedari" in menu:
             if save_data("Purchase", [date, party, fw, r, total, det]):
                 st.success("Saved!"); time.sleep(1); st.rerun()
     
-    st.subheader("Recent History")
+    st.subheader("📜 Recent History")
     df = load_data("Purchase")
     if not df.empty:
         search = st.text_input("🔍 Search Party...", key="sb")
@@ -184,7 +219,7 @@ if "Khareedari" in menu:
         c2.markdown(f"<div class='metric-card'><div class='metric-label'>Total Amount</div><div class='metric-value'>Rs {df['Amount'].sum():,.0f}</div></div>", unsafe_allow_html=True)
 
 # === B. FAROKHT ===
-elif "Farokht" in menu:
+elif "Farokht" in selected_tab:
     if st.session_state.invoice_data:
         d = st.session_state.invoice_data
         st.button("🔙 Back", on_click=lambda: st.session_state.pop("invoice_data"))
@@ -194,8 +229,8 @@ elif "Farokht" in menu:
         st.header("🏷️ Farokht Entry")
         with st.form("sell"):
             c1,c2 = st.columns(2); cust=c1.text_input("Customer Name"); bill=c2.text_input("Bill No")
-            c3,c4 = st.columns(2); w=c3.number_input("Wazan", format="%.3f"); unit=c4.selectbox("Unit", ["Kg","Grams"])
-            c5,c6 = st.columns(2); r=c5.number_input("Rate"); det=c6.text_input("Tafseel")
+            c3,c4 = st.columns(2); w=c3.number_input("Wazan (Weight)", format="%.3f"); unit=c4.selectbox("Unit", ["Kg","Grams"])
+            c5,c6 = st.columns(2); r=c5.number_input("Rate (Bhaao)"); det=c6.text_input("Tafseel")
             fw = w if unit=="Kg" else w/1000
             total = fw*r
             st.markdown(f"<h3 style='color:#2e7d32;'>Bill: Rs {total:,.0f}</h3>", unsafe_allow_html=True)
@@ -204,7 +239,7 @@ elif "Farokht" in menu:
                 if save_data("Sale", [date, cust, bill, fw, r, total, det]):
                     st.session_state.invoice_data = {"date":date, "cust":cust, "bill":bill, "w":fw, "r":r, "a":f"{total:,.0f}", "det":det}
                     st.rerun()
-        st.subheader("Recent History")
+        st.subheader("📜 Recent History")
         df = load_data("Sale")
         if not df.empty:
             search = st.text_input("🔍 Search Bill/Customer...", key="ss")
@@ -212,11 +247,11 @@ elif "Farokht" in menu:
             st.dataframe(df, use_container_width=True)
 
 # === C. KHARCHA ===
-elif "Kharcha" in menu:
-    st.header("💸 Daily Kharcha")
+elif "Kharcha" in selected_tab:
+    st.header("💸 Daily Kharcha (Expenses)")
     with st.form("exp"):
         cat = st.selectbox("Kharcha Type", ["Dukan (Shop Expense)", "Imran Ali (Personal)", "Salman Khan (Personal)"])
-        c1, c2 = st.columns(2); amt = c1.number_input("Amount", min_value=0); det = c2.text_input("Details")
+        c1, c2 = st.columns(2); amt = c1.number_input("Amount (Raqam)", min_value=0); det = c2.text_input("Details")
         if st.form_submit_button("💾 Save Expense"):
             date = datetime.now(pytz.timezone('Asia/Karachi')).strftime("%Y-%m-%d")
             if save_data("Expenses", [date, cat, amt, det]):
@@ -228,7 +263,7 @@ elif "Kharcha" in menu:
         st.markdown(f"<div style='background:#fee2e2; color:#b91c1c; padding:10px; border-radius:8px; font-weight:bold; text-align:center;'>Total Kharcha: Rs {df['Amount'].sum():,.0f}</div>", unsafe_allow_html=True)
 
 # === D. CLOSING ===
-elif "Closing" in menu:
+elif "Closing" in selected_tab:
     st.header("📒 Munafa & Hisaab")
     b = load_data("Purchase"); s = load_data("Sale"); e = load_data("Expenses")
     buy_sum = b["Amount"].sum() if not b.empty else 0
@@ -257,7 +292,7 @@ elif "Closing" in menu:
     cc2.info(f"Salman Khan: Rs {salman:,.0f}")
     st.success(f"💵 **Net Cash in Hand:** Rs {cash:,.0f}")
 
-elif "Users" in menu:
+elif "Users" in selected_tab:
     u=st.text_input("New User"); p=st.text_input("Pass")
     if st.button("Create"): 
         try: get_connection().worksheet("Users").append_row([u,p]); st.success("Done")
