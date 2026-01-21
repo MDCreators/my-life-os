@@ -6,17 +6,17 @@ import time
 import json
 import firebase_admin
 from firebase_admin import credentials, firestore
-import re
 
 # --- 1. CONFIG ---
 st.set_page_config(page_title="E-Com Pro", page_icon="🚀", layout="wide", initial_sidebar_state="expanded")
 
-# --- 2. FIREBASE CONNECTION (NUCLEAR FIX) ---
+# --- 2. FIREBASE CONNECTION (SIMPLE & CLEAN) ---
+# Sirf connect karay ga, key ko chheray ga nahi
 if not firebase_admin._apps:
     try:
-        # Secrets Check
+        # Secrets check
         if "firebase" not in st.secrets:
-            st.error("🚨 Secrets file mein [firebase] section nahi mila!")
+            st.error("🚨 Secrets file mein [firebase] section nahi mila.")
             st.stop()
             
         key_content = st.secrets["firebase"]["my_key"]
@@ -25,23 +25,12 @@ if not firebase_admin._apps:
         try:
             key_dict = json.loads(key_content)
         except json.JSONDecodeError:
-            st.error("🚨 Key Error: Secrets mein 'my_key' sahi JSON format mein nahi hay.")
+            st.error("🚨 JSON Error: Secrets mein key sahi copy-paste nahi hui.")
             st.stop()
         
-        # 🔥 NUCLEAR CLEANER: Key ko zabardasti theek karna
+        # 🔥 FINAL FIX: Sirf New Line ko set karein, baqi key ko hath na lagayen
         if "private_key" in key_dict:
-            raw_key = key_dict["private_key"]
-            
-            # Step 1: Sirf A-Z, 0-9, +, / aur = ko rakho. Baqi sab (commas, spaces, headers) ura do.
-            # Yeh 'InvalidByte' ka jarri ilaj hay.
-            base64_body = re.sub(r'[^a-zA-Z0-9+/=]', '', raw_key)
-            
-            # Step 2: Key ko wapis Standard PEM Format mein pack karo
-            # (Firebase ko '-----BEGIN...' aur new lines chahiye hoti hain)
-            cleaned_key = "-----BEGIN PRIVATE KEY-----\n" + base64_body + "\n-----END PRIVATE KEY-----\n"
-            
-            # Step 3: Dictionary update karo
-            key_dict["private_key"] = cleaned_key
+            key_dict["private_key"] = key_dict["private_key"].replace("\\n", "\n")
         
         # Connect
         cred = credentials.Certificate(key_dict)
@@ -49,12 +38,11 @@ if not firebase_admin._apps:
         
     except Exception as e:
         st.error(f"🚨 Connection Error: {e}")
-        st.warning("⚠️ Agar ab bhi error aaye, tu iska matlab aap ki key 'Adhoori' (Incomplete) copy hui hay. Phir Nayi Key hi hal hay.")
         st.stop()
 
 db = firestore.client()
 
-# --- 3. DARK MODE UI (Baqi Code Same) ---
+# --- 3. DARK MODE UI (Baqi App Same Hay) ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
