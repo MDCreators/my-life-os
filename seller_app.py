@@ -10,13 +10,33 @@ from firebase_admin import credentials, firestore
 # --- 1. CONFIG ---
 st.set_page_config(page_title="E-Com Pro", page_icon="🚀", layout="wide", initial_sidebar_state="expanded")
 
-# --- 2. FIREBASE CONNECTION ---
+# --- 2. FIREBASE CONNECTION (AUTO-FIXER ADDED) ---
 if not firebase_admin._apps:
     try:
+        # Secrets se key uthao
+        # Make sure secrets.toml mein [firebase] section ho
+        if "firebase" not in st.secrets:
+            st.error("🚨 Secrets file mein [firebase] section nahi mila!")
+            st.stop()
+            
         key_content = st.secrets["firebase"]["my_key"]
-        key_dict = json.loads(key_content)
+        
+        # JSON Parse
+        try:
+            key_dict = json.loads(key_content)
+        except json.JSONDecodeError:
+            st.error("🚨 Key Error: Secrets mein 'my_key' sahi JSON format mein nahi hay.")
+            st.stop()
+        
+        # 🔥 CRITICAL FIX: Private Key ki new lines ko theek karo
+        # Yeh 'InvalidByte' aur 'MalformedFraming' errors ko khatam kar de ga
+        if "private_key" in key_dict:
+            key_dict["private_key"] = key_dict["private_key"].replace("\\n", "\n")
+        
+        # Ab connect karo
         cred = credentials.Certificate(key_dict)
         firebase_admin.initialize_app(cred)
+        
     except Exception as e:
         st.error(f"🚨 Connection Error: {e}")
         st.stop()
@@ -168,7 +188,7 @@ def get_expenses(owner_id):
     data.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
     return data
 
-# --- 6. SUPER ADMIN UI (WITH DELETE OPTION) ---
+# --- 6. SUPER ADMIN UI ---
 if is_super_admin:
     st.sidebar.markdown("### 👑 Super Admin")
     if st.sidebar.button("Logout"):
