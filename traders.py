@@ -14,9 +14,11 @@ st.markdown("""
     <style>
         .stApp { background-color: #ffffff !important; color: #000000 !important; }
         
-        /* Font Settings: Urdu for Headers, Arial for English */
+        /* Urdu Font for Headers */
         h1, h2, h3 { font-family: 'Jameel Noori Nastaleeq', 'Arial', sans-serif; text-align: right; }
-        p, div, span, label, button, input { font-family: 'Arial', sans-serif; }
+        
+        /* English Font for Body */
+        p, div, span, label, button, input, th, td { font-family: 'Arial', sans-serif; }
         
         .metric-card { background-color: #f8f9fa; border: 1px solid #e9ecef; padding: 15px; border-radius: 12px; border-left: 6px solid #2e7d32; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 10px; }
         .metric-value { font-size: 26px; font-weight: 800; color: #2e7d32 !important; }
@@ -25,24 +27,31 @@ st.markdown("""
         .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] > div { background-color: #f0f2f5 !important; color: #000000 !important; border: 1px solid #ced4da !important; border-radius: 8px !important; }
         .stButton>button { width: 100%; border-radius: 8px; height: 3em; font-weight: bold; border: none; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
         
-        /* Hide Branding */
+        /* HIDE BRANDING */
         #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;} [data-testid="stToolbar"] {visibility: hidden;} .stDeployButton {display:none;}
         
-        /* Print */
+        /* PRINT */
         .invoice-box { background: white; padding: 20px; border: 2px solid #333; }
         @media print { [data-testid="stSidebar"] { display: none; } .stApp { background: white; } .invoice-box { position: absolute; top: 0; left: 0; width: 100%; border: none; } }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. CONNECTION ---
+# --- 2. CONNECTION (FIXED) ---
 def get_connection():
     if "service_account" not in st.secrets: st.error("Secrets Missing"); st.stop()
-    creds = dict(st.secrets["service_account"])
-    if "private_key" in creds:
-        creds["private_key"] = creds["private_key"].replace("\\n", "\n").replace('\\', '') if creds["private_key"].startswith('\\') else creds["private_key"].replace("\\n", "\n")
+    creds_dict = dict(st.secrets["service_account"])
+    
+    # Fix Key Formatting
+    if "private_key" in creds_dict:
+        key = creds_dict["private_key"]
+        if key.startswith("\\"): key = key[1:]
+        creds_dict["private_key"] = key.replace("\\n", "\n")
     
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    creds = Credentials.from_service_account_info(creds_dict=creds, scopes=scope)
+    
+    # 🔥 FIXED LINE: info=creds_dict (Yeh pehlay ghalat tha)
+    creds = Credentials.from_service_account_info(info=creds_dict, scopes=scope)
+    
     client = gspread.authorize(creds)
     return client.open("Trade")
 
@@ -59,7 +68,6 @@ def get_users():
         ws = get_worksheet_safe(client, "Users") or get_worksheet_safe(client, "User")
         if not ws: return pd.DataFrame()
         data = ws.get_all_values()
-        if not data: return pd.DataFrame()
         if len(data) < 2: return pd.DataFrame()
         headers = data.pop(0)
         return pd.DataFrame(data, columns=headers)
@@ -99,7 +107,7 @@ def save_data(tab, row_data):
         st.error(f"Save Error: {e}")
         return False
 
-# 🔥 EDIT FUNCTION
+# 🔥 EDIT & UPDATE FUNCTION
 def update_sheet_data(tab, edited_df):
     try:
         client = get_connection()
@@ -134,7 +142,7 @@ if not st.session_state["logged_in"]:
                     if not match.empty:
                         st.session_state.update({"logged_in":True, "username":u, "user_role":"User"}); st.rerun()
                     else: st.error("❌ Invalid ID/Pass")
-                else: st.warning("⚠️ No users found in sheet. Use 'admin' / 'admin123'")
+                else: st.warning("⚠️ No users found. Login with 'admin' / 'admin123'")
     st.stop()
 
 # --- 5. MAIN APP ---
@@ -142,7 +150,7 @@ with st.sidebar:
     st.title(f"👤 {st.session_state['username']}")
     st.write("---")
     
-    # 🔥 URDU TABS (As requested)
+    # 🔥 URDU TABS (Right to Left)
     tabs = ["خریداری", "فروخت", "اخراجات", "منافع / حساب"]
     if st.session_state["user_role"] == "Admin": tabs.append("Users")
     
@@ -174,7 +182,7 @@ if menu == "خریداری":
         if st.form_submit_button("📥 Save Purchase"):
             date = datetime.now(pytz.timezone('Asia/Karachi')).strftime("%Y-%m-%d")
             if save_data("Purchase", [date, party, fw, r, total, det]):
-                st.success("✅ Saved!"); time.sleep(1); st.rerun()
+                st.success("✅ Saved Successfully!"); time.sleep(1); st.rerun()
     
     st.subheader("📜 Edit History")
     df = load_data("Purchase")
@@ -185,7 +193,7 @@ if menu == "خریداری":
         # 🔥 EDITABLE GRID
         edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, key="edit_buy")
         
-        # 🔥 AUTO-CALCULATE TOTAL ON EDIT
+        # 🔥 AUTO-CALCULATION
         edited_df["Amount"] = edited_df["Weight"] * edited_df["Rate"]
         
         # Show updated totals
@@ -193,7 +201,6 @@ if menu == "خریداری":
         c1.markdown(f"<div class='metric-card'><div class='metric-label'>Total Weight</div><div class='metric-value'>{edited_df['Weight'].sum():,.3f} Kg</div></div>", unsafe_allow_html=True)
         c2.markdown(f"<div class='metric-card'><div class='metric-label'>Total Amount</div><div class='metric-value'>Rs {edited_df['Amount'].sum():,.0f}</div></div>", unsafe_allow_html=True)
         
-        # UPDATE SHEET BUTTON
         if st.button("💾 Update Google Sheet", key="upd_buy"):
             if update_sheet_data("Purchase", edited_df):
                 st.success("✅ Sheet Updated!"); time.sleep(1); st.rerun()
@@ -205,10 +212,7 @@ elif menu == "فروخت":
         st.button("🔙 Back", on_click=lambda: st.session_state.pop("invoice_data"))
         st.markdown(f"""<div class='invoice-box'><center><h1>SI TRADERS</h1><p>Deals in all kinds of Scrap</p></center><hr><p><b>Bill No:</b> {d['bill']}<br><b>Customer:</b> {d['cust']}<br><b>Date:</b> {d['date']}</p><table width='100%' style='border-collapse: collapse;'><tr><th style='text-align:left; border-bottom:1px solid #ddd;'>Item</th><th style='border-bottom:1px solid #ddd;'>Weight</th><th style='border-bottom:1px solid #ddd;'>Rate</th><th style='text-align:right; border-bottom:1px solid #ddd;'>Amount</th></tr><tr><td style='padding:8px 0;'>{d['det']}</td><td style='text-align:center;'>{d['w']}</td><td style='text-align:center;'>{d['r']}</td><td style='text-align:right;'>{d['a']}</td></tr></table><br><h3 style='text-align:right;'>Total: Rs {d['a']}</h3></div>""", unsafe_allow_html=True)
     else:
-        # Urdu Header
         st.markdown("<h2>🏷️ نئی فروخت</h2>", unsafe_allow_html=True)
-        
-        # English Form
         with st.form("sell"):
             c1,c2 = st.columns(2); cust=c1.text_input("Customer Name"); bill=c2.text_input("Bill No")
             c3,c4 = st.columns(2); w=c3.number_input("Weight", format="%.3f"); unit=c4.selectbox("Unit", ["Kg","Grams"])
@@ -230,10 +234,7 @@ elif menu == "فروخت":
             search = st.text_input("🔍 Search Bill...", key="ss")
             if search: df = df[df.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
             
-            # 🔥 EDITABLE GRID
             edited_df_sale = st.data_editor(df, num_rows="dynamic", use_container_width=True, key="edit_sale")
-            
-            # 🔥 AUTO-CALCULATE
             edited_df_sale["Amount"] = edited_df_sale["Weight"] * edited_df_sale["Rate"]
             
             st.markdown(f"<div style='text-align:right; font-weight:bold;'>Updated Total: Rs {edited_df_sale['Amount'].sum():,.0f}</div>", unsafe_allow_html=True)
@@ -244,10 +245,7 @@ elif menu == "فروخت":
 
 # === C. EXPENSES ===
 elif menu == "اخراجات":
-    # Urdu Header
-    st.markdown("<h2>💸 اخراجات</h2>", unsafe_allow_html=True)
-    
-    # English Form
+    st.markdown("<h2>💸 روزنامچہ اخراجات</h2>", unsafe_allow_html=True)
     with st.form("exp"):
         cat = st.selectbox("Category", ["Dukan (Shop Expense)", "Imran Ali (Personal)", "Salman Khan (Personal)"])
         c1, c2 = st.columns(2)
@@ -261,7 +259,6 @@ elif menu == "اخراجات":
     st.subheader("📜 Edit Expenses")
     df = load_data("Expenses")
     if not df.empty:
-        # 🔥 EDITABLE GRID
         edited_df_exp = st.data_editor(df, num_rows="dynamic", use_container_width=True, key="edit_exp")
         
         if st.button("💾 Update Google Sheet", key="upd_exp"):
@@ -272,8 +269,7 @@ elif menu == "اخراجات":
 
 # === D. CLOSING ===
 elif menu == "منافع / حساب":
-    # Urdu Header
-    st.markdown("<h2>📒 منافع اور حساب</h2>", unsafe_allow_html=True)
+    st.markdown("<h2>📒 کاروباری حساب</h2>", unsafe_allow_html=True)
     
     b = load_data("Purchase"); s = load_data("Sale"); e = load_data("Expenses")
     
