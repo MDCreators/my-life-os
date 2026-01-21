@@ -9,13 +9,21 @@ import time
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="SI Traders", page_icon="⚖️", layout="wide")
 
-# --- 🎨 HIGH CONTRAST STYLING (BLACK TEXT ON WHITE) ---
+# --- 🎨 BEHTAR INTERFACE (STYLING) ---
 st.markdown("""
     <style>
         .stApp { background-color: #ffffff !important; color: #000000 !important; }
-        h1, h2, h3, h4, h5, h6, p, div, span, label { color: #000000 !important; font-family: 'Arial', sans-serif; font-weight: bold; }
-        .stButton>button { width: 100%; border-radius: 8px; font-weight: bold; border: 2px solid #000; }
-        .stTextInput input, .stNumberInput input, .stSelectbox div { border: 2px solid #000 !important; color: black !important; }
+        h1, h2, h3, h4, h5, h6, p, div, span, label { color: #000000 !important; font-family: 'Arial', sans-serif; }
+        .metric-card { 
+            background-color: #f8f9fa; border: 2px solid #2e7d32; padding: 20px; 
+            border-radius: 15px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
+        }
+        .total-box {
+            background-color: #e8f5e9; padding: 10px; border-radius: 10px;
+            border-left: 5px solid #2e7d32; margin: 10px 0; font-weight: bold;
+        }
+        .stButton>button { border-radius: 10px; font-weight: bold; border: 2px solid #000; height: 3em; }
+        .stTextInput input, .stNumberInput input, .stSelectbox div { border: 2px solid #000 !important; }
         #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
@@ -28,27 +36,20 @@ def get_connection():
         creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n").replace('\\', '') if creds_dict["private_key"].startswith('\\') else creds_dict["private_key"].replace("\\n", "\n")
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
-    client = gspread.authorize(creds)
-    return client.open("Trade") #
+    return gspread.authorize(creds).open("Trade")
 
 # --- 3. HELPER FUNCTIONS ---
-def get_worksheet_safe(client, tab_name):
-    try: return client.worksheet(tab_name)
+def get_ws(client, name):
+    try: return client.worksheet(name)
     except: return None
-
-def get_users_from_sheet():
-    try:
-        ws = get_worksheet_safe(get_connection(), "Users")
-        return pd.DataFrame(ws.get_all_records())
-    except: return pd.DataFrame()
 
 def load_data(tab):
     try:
-        ws = get_worksheet_safe(get_connection(), tab)
-        raw_data = ws.get_all_values()
-        if len(raw_data) < 2: return pd.DataFrame()
-        headers = raw_data.pop(0)
-        df = pd.DataFrame(raw_data, columns=headers)
+        ws = get_ws(get_connection(), tab)
+        raw = ws.get_all_values()
+        if len(raw) < 2: return pd.DataFrame()
+        headers = raw.pop(0)
+        df = pd.DataFrame(raw, columns=headers)
         for c in ["Weight", "Rate", "Amount"]:
             if c in df.columns: df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0)
         if st.session_state.get("user_role") != "Admin":
@@ -58,37 +59,43 @@ def load_data(tab):
 
 def save_data(tab, row_data):
     try:
-        ws = get_worksheet_safe(get_connection(), tab)
+        ws = get_ws(get_connection(), tab)
         ws.append_row([st.session_state["username"]] + row_data)
         return True
     except: return False
 
 def delete_entry(tab, row_index):
     try:
-        ws = get_worksheet_safe(get_connection(), tab)
-        ws.delete_rows(row_index + 2) # +2 because of 0-index and header row
+        ws = get_ws(get_connection(), tab)
+        ws.delete_rows(row_index + 2)
         return True
     except: return False
 
-def reset_monthly_data():
+# 🔥 MONTHLY RESET & SUMMARY LOGIC
+def reset_month_and_log_summary(profit, earning):
     client = get_connection()
-    suffix = datetime.now(pytz.timezone('Asia/Karachi')).strftime("_%b_%Y")
+    pk_tz = pytz.timezone('Asia/Karachi')
+    month_name = datetime.now(pk_tz).strftime("%B_%Y")
+    
+    # 1. Save Summary to a 'Summary' sheet
+    summary_ws = get_ws(client, "Summary")
+    if not summary_ws:
+        summary_ws = client.add_worksheet(title="Summary", rows="100", cols="5")
+        summary_ws.append_row(["Month", "Total Earning", "Net Profit", "Date"])
+    summary_ws.append_row([month_name, earning, profit, datetime.now(pk_tz).strftime("%d-%b-%Y")])
+
+    # 2. Archive Current Tabs
     for t in ["Purchase", "Sale", "Expenses"]:
-        ws = get_worksheet_safe(client, t)
+        ws = get_ws(client, t)
         if ws:
-            # Rename for Restore/Backup
-            ws.update_title(f"{t}{suffix}")
-            # Create fresh sheet
-            new_ws = client.add_worksheet(title=t, rows="1000", cols="20")
-            headers = ["Owner", "Date", "Party Name", "Weight", "Rate", "Amount", "Details"] if t=="Purchase" else \
-                      ["Owner", "Date", "Customer Name", "Bill No", "Weight", "Rate", "Amount", "Details"] if t=="Sale" else \
-                      ["Owner", "Date", "Category", "Amount", "Details"]
-            new_ws.append_row(headers)
+            old_data = ws.get_all_values()
+            client.add_worksheet(title=f"{t}_{month_name}", rows="1000", cols="10").append_rows(old_data)
+            ws.clear()
+            ws.append_row(old_data[0]) # Put headers back
     return True
 
 # --- 4. LOGIN ---
 if "logged_in" not in st.session_state: st.session_state.update({"logged_in": False, "username": "", "user_role": "User"})
-
 if not st.session_state["logged_in"]:
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
@@ -98,7 +105,8 @@ if not st.session_state["logged_in"]:
         if st.button("Login"):
             if u == "admin" and p == "admin123":
                 st.session_state.update({"logged_in":True, "username":"Admin", "user_role":"Admin"}); st.rerun()
-            users_df = get_users_from_sheet() #
+            ws = get_ws(get_connection(), "Users")
+            users_df = pd.DataFrame(ws.get_all_records())
             if not users_df.empty and u in users_df["Username"].values:
                 match = users_df[users_df["Username"] == u].iloc[0]
                 if str(match["Password"]) == p:
@@ -108,81 +116,109 @@ if not st.session_state["logged_in"]:
 
 # --- 5. MAIN APP ---
 pk_tz = pytz.timezone('Asia/Karachi') #
-# DATE FORMAT FIX: 21-Jan-2026
-formatted_date = datetime.now(pk_tz).strftime("%d-%b-%Y")
+f_date = datetime.now(pk_tz).strftime("%d-%b-%Y")
 
-# Sidebar Menu (Proper Urdu)
 with st.sidebar:
-    st.title(f"👤 {st.session_state['username']}")
-    menu_options = ["خریداری", "فروخت", "اخراجات", "کلوزنگ"]
-    if st.session_state["user_role"] == "Admin": menu_options.append("ایڈمن پینل")
-    menu = st.radio("Menu", menu_options)
-    if st.button("Logout"): st.session_state["logged_in"]=False; st.rerun()
+    st.markdown(f"### 👤 {st.session_state['username']}")
+    menu = st.radio("Menu", ["خریداری", "فروخت", "اخراجات", "کلوزنگ", "ایڈمن پینل"] if st.session_state["user_role"] == "Admin" else ["خریداری", "فروخت", "اخراجات", "کلوزنگ"])
+    if st.button("🚪 Logout"): st.session_state.clear(); st.rerun()
 
-# === A. KHAREEDARI ===
+# === A. PURCHASE (خریداری) ===
 if menu == "خریداری":
-    st.header("نئی خریداری")
+    st.header("🟢 نئی خریداری")
     with st.form("buy"):
         party = st.text_input("Party Name")
         c1, c2 = st.columns(2)
-        w = c1.number_input("Weight", format="%.3f"); r = c2.number_input("Rate")
-        if st.form_submit_button("Save Purchase"):
-            if save_data("Purchase", [formatted_date, party, w, r, w*r, ""]):
-                st.success(f"Saved: {formatted_date}"); time.sleep(1); st.rerun()
+        w = c1.number_input("Weight (Wazan)", format="%.3f"); r = c2.number_input("Rate")
+        if st.form_submit_button("💾 Save Entry"):
+            if save_data("Purchase", [f_date, party, w, r, w*r, ""]):
+                st.success("Saved!"); st.rerun()
     
-    st.subheader("Purchase History")
+    st.divider()
     df = load_data("Purchase")
     if not df.empty:
+        # SEARCH & TOTALS
+        st.subheader("🔍 تلاش اور تفصیل (Search & Totals)")
+        search = st.text_input("Naam likh kar dhoondain (Search Party Name)...")
+        if search: df = df[df['Party Name'].str.contains(search, case=False)]
+        
+        c1, c2 = st.columns(2)
+        c1.markdown(f"<div class='total-box'>Kul Wazan: {df['Weight'].sum():,.3f} Kg</div>", unsafe_allow_html=True)
+        c2.markdown(f"<div class='total-box'>Kul Raqam: Rs {df['Amount'].sum():,.0f}</div>", unsafe_allow_html=True)
+        
         st.dataframe(df, use_container_width=True)
-        # MANUAL RESET/DELETE OPTION
-        row_to_del = st.selectbox("Select Row to Delete (Ghalat entry khatam karein)", range(len(df)), format_func=lambda x: f"Row {x+1}: {df.iloc[x]['Party Name']}")
-        if st.button("🗑️ Delete Selected Entry"):
-            if delete_entry("Purchase", row_index=row_to_del):
-                st.success("Entry Deleted!"); time.sleep(1); st.rerun()
+        idx = st.selectbox("Select Row to Delete", range(len(df)), format_func=lambda x: f"Delete: {df.iloc[x]['Party Name']}")
+        if st.button("🗑️ Delete Selected"):
+            if delete_entry("Purchase", idx): st.success("Deleted!"); st.rerun()
 
-# === B. FAROKHT ===
+# === B. SALE (فروخت) ===
 elif menu == "فروخت":
-    st.header("نئی فروخت")
+    st.header("🔴 نئی فروخت")
     with st.form("sell"):
         cust = st.text_input("Customer Name"); bill = st.text_input("Bill No")
         c1, c2 = st.columns(2)
         w = c1.number_input("Weight", format="%.3f"); r = c2.number_input("Rate")
-        if st.form_submit_button("Save Sale"):
-            if save_data("Sale", [formatted_date, cust, bill, w, r, w*r, ""]):
-                st.success("Sale Saved!"); time.sleep(1); st.rerun()
-    
-    st.subheader("Sale History")
+        if st.form_submit_button("💾 Save Sale"):
+            if save_data("Sale", [f_date, cust, bill, w, r, w*r, ""]):
+                st.success("Saved!"); st.rerun()
+
+    st.divider()
     df = load_data("Sale")
     if not df.empty:
+        search = st.text_input("Search Customer/Bill No...")
+        if search: df = df[df['Customer Name'].str.contains(search, case=False) | df['Bill No'].str.contains(search, case=False)]
+        
+        c1, c2 = st.columns(2)
+        c1.markdown(f"<div class='total-box'>Kul Wazan: {df['Weight'].sum():,.3f} Kg</div>", unsafe_allow_html=True)
+        c2.markdown(f"<div class='total-box'>Kul Bill Amount: Rs {df['Amount'].sum():,.0f}</div>", unsafe_allow_html=True)
+        
         st.dataframe(df, use_container_width=True)
-        row_to_del = st.selectbox("Select Row to Delete", range(len(df)), format_func=lambda x: f"Row {x+1}: {df.iloc[x]['Customer Name']}")
-        if st.button("🗑️ Delete Selected Entry"):
-            if delete_entry("Sale", row_index=row_to_del):
-                st.success("Deleted!"); time.sleep(1); st.rerun()
+        idx = st.selectbox("Select Row to Delete", range(len(df)), format_func=lambda x: f"Delete: {df.iloc[x]['Customer Name']}")
+        if st.button("🗑️ Delete Selected"):
+            if delete_entry("Sale", idx): st.success("Deleted!"); st.rerun()
 
-# === C. EXPENDITURE ===
+# === C. EXPENSES (اخراجات) ===
 elif menu == "اخراجات":
-    st.header("Daily Expenses")
+    st.header("💸 روزانہ کے اخراجات")
     with st.form("exp"):
         cat = st.selectbox("Category", ["Shop", "Imran Ali", "Salman Khan"])
         amt = st.number_input("Amount")
-        if st.form_submit_button("Save"):
-            if save_data("Expenses", [formatted_date, cat, amt, ""]):
-                st.success("Saved!"); time.sleep(1); st.rerun()
+        if st.form_submit_button("Save Expense"):
+            if save_data("Expenses", [f_date, cat, amt, ""]):
+                st.success("Saved!"); st.rerun()
+    st.dataframe(load_data("Expenses"), use_container_width=True)
 
-# === D. CLOSING ===
+# === D. CLOSING (کلوزنگ) ===
 elif menu == "کلوزنگ":
-    st.header("Monthly Closing")
+    st.header("📒 ماہانہ رپورٹ (Monthly Report)")
     b = load_data("Purchase"); s = load_data("Sale"); e = load_data("Expenses")
     tb = b["Amount"].sum() if not b.empty else 0
     ts = s["Amount"].sum() if not s.empty else 0
     te = e["Amount"].sum() if not e.empty else 0
-    st.metric("Net Profit", f"Rs {ts - tb - te:,}")
+    profit = ts - tb - te
+    
+    c1, c2 = st.columns(2)
+    c1.markdown(f"<div class='metric-card'><h3>Kul Earning</h3><h1 style='color:blue'>Rs {ts:,}</h1></div>", unsafe_allow_html=True)
+    c2.markdown(f"<div class='metric-card'><h3>Saaf Munafa (Net Profit)</h3><h1 style='color:green'>Rs {profit:,}</h1></div>", unsafe_allow_html=True)
+    
+    st.write("---")
+    st.subheader("📜 پچھلے مہینوں کا ریکارڈ (Past Month Summary)")
+    summary_df = load_data("Summary")
+    if not summary_df.empty:
+        st.dataframe(summary_df, use_container_width=True)
+    else: st.info("Abhi tak koi summary archive nahi hui.")
 
-# === E. ADMIN (ONLY VISIBLE TO ADMIN) ===
+# === E. ADMIN PANEL ===
 elif menu == "ایڈمن پینل":
-    st.header("Admin Control HQ")
-    st.subheader("Monthly Restore / Reset")
-    st.warning("⚠️ Yeh button dabane se sara purana data Archive ho jaye ga aur nayi sheets ban jayen gi.")
-    if st.button("🔴 Reset Month & Restore Fresh Sheets"):
-        if reset_monthly_data(): st.success("Data Restored! Nayi sheets ban gayi hain."); st.balloons()
+    st.header("⚙️ ایڈمن پینل")
+    st.subheader("ماہانہ ری سیٹ (Monthly Reset)")
+    st.warning("⚠️ Yeh button mahinay ke end par dabayen. Purana data archive ho jaye ga aur Summary page par profit/earning save ho jaye gi.")
+    
+    # Calculate current stats for summary before reset
+    b = load_data("Purchase"); s = load_data("Sale"); e = load_data("Expenses")
+    cur_earning = s["Amount"].sum() if not s.empty else 0
+    cur_profit = cur_earning - (b["Amount"].sum() if not b.empty else 0) - (e["Amount"].sum() if not e.empty else 0)
+    
+    if st.button("🔴 Start New Month & Archive Record"):
+        if reset_month_and_log_summary(cur_profit, cur_earning):
+            st.success("Data Archived! Naya mahina shuru ho gaya."); st.balloons(); time.sleep(1); st.rerun()
