@@ -56,7 +56,6 @@ st.markdown("""
     .invoice-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
     .invoice-table th { text-align: left; border-bottom: 2px solid #ddd; padding: 8px; background-color: #f8f8f8; color: black !important; font-weight: bold; }
     .invoice-table td { border-bottom: 1px solid #eee; padding: 8px; color: black !important; }
-    .total-row td { border-top: 2px solid #333; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -175,6 +174,37 @@ if is_super_admin:
         st.session_state["user_session"] = None
         st.rerun()
     st.title("Admin HQ")
+    
+    # --- ADMIN TABS (WAPIS AA GAYE) ---
+    t1, t2 = st.tabs(["Create Client", "Manage Clients"])
+    with t1:
+        with st.form("new_client"):
+            st.subheader("Add New Client")
+            c_email = st.text_input("Email")
+            c_pass = st.text_input("Password")
+            c_name = st.text_input("Business Name")
+            if st.form_submit_button("Create Account"):
+                if c_email and c_pass:
+                    db.collection("users").document(c_email).set({
+                        "password": c_pass, "business_name": c_name, 
+                        "created_at": firestore.SERVER_TIMESTAMP
+                    })
+                    st.success(f"Client {c_name} Created!")
+                else:
+                    st.error("Please fill all fields")
+    with t2:
+        st.subheader("Active Clients")
+        users = db.collection("users").stream()
+        for u in users:
+            d = u.to_dict()
+            with st.expander(f"🏢 {d.get('business_name')} ({u.id})"):
+                c1, c2 = st.columns([4, 1])
+                c1.write(f"**Password:** {d.get('password')}")
+                if c2.button("🗑️ Delete", key=f"del_{u.id}"):
+                    db.collection("users").document(u.id).delete()
+                    st.warning(f"Deleted {u.id}")
+                    time.sleep(1)
+                    st.rerun()
     st.stop()
 
 with st.sidebar:
@@ -215,7 +245,6 @@ elif menu == "📝 New Order":
         if sel != "Select...":
             p_obj = next(p for p in products if p['name'] == sel)
             
-            # --- Per Item Discount ---
             col_q, col_d = st.columns(2)
             qty = col_q.number_input("Qty", 1, 100, 1)
             item_disc = col_d.number_input("Discount %", 0, 100, 0, help="Is item par kitna discount dena hai?")
@@ -289,7 +318,6 @@ elif menu == "🚚 Orders":
                 if st.button("🧾 Invoice", key=f"inv_{o['id']}"):
                     st.markdown("---")
                     
-                    # INVOICE GENERATION
                     rows = ""
                     for i in o['items']:
                         d_per = i.get('discount_percent', 0)
@@ -302,7 +330,6 @@ elif menu == "🚚 Orders":
                     if o.get('global_discount', 0) > 0:
                         g_disc_row = f"<tr><td colspan='3'>Extra Discount</td><td style='text-align:right; color:red;'>-{o.get('global_discount')}</td></tr>"
 
-                    # HTML (No indentation to prevent code block)
                     html = f"""<div class="invoice-box">
 <h2 style="margin-top:0;">INVOICE</h2>
 <p><b>Merchant:</b> {current_biz_name}<br><b>Date:</b> {o['date'].split('.')[0]}</p>
