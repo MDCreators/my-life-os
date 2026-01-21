@@ -1,4 +1,6 @@
 import streamlit as st
+import gspread
+st.sidebar.warning(f"Gspread Version: {gspread.__version__}")
 import pandas as pd
 from datetime import datetime
 import pytz 
