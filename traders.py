@@ -1,4 +1,6 @@
 import streamlit as st
+import gspread
+st.sidebar.error(f"⚠️ Aap ka Version: {gspread.__version__}")
 import pandas as pd
 from datetime import datetime
 import pytz 
@@ -9,57 +11,40 @@ import time
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="SI Traders", page_icon="⚖️", layout="wide")
 
-# CSS Setup
+# --- 🕵️‍♂️ DIAGNOSTICS (MASLA PAKARNAY KE LIYE) ---
+st.sidebar.header("🛠️ Diagnostics")
+st.sidebar.info(f"Gspread Version: {gspread.__version__}")
+if gspread.__version__ < "5.10.0":
+    st.error("🚨 CRITICAL ERROR: Library Purani Hay! Requirements.txt mein 'gspread>=6.0.0' likhein aur App Reboot karein.")
+    st.stop()
+
+# CSS
 st.markdown("""
     <style>
         .stApp { background-color: #f4f6f9; }
         .metric-card { background: white; padding: 15px; border-radius: 10px; border-left: 5px solid #2e7d32; box-shadow: 2px 2px 5px rgba(0,0,0,0.1); text-align: center; }
         .sale-card { border-left: 5px solid #c62828; }
-        .metric-title { font-size: 14px; color: #555; }
-        .metric-value { font-size: 24px; font-weight: bold; color: #000; }
         .invoice-box { background: white; padding: 30px; border: 1px solid #eee; }
         @media print { [data-testid="stSidebar"] { display: none; } .invoice-box { position: absolute; top: 0; left: 0; width: 100%; } }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. DIAGNOSIS (SIDEBAR) ---
-st.sidebar.info(f"⚙️ Library Version: {gspread.__version__}")
-if st.sidebar.button("🛠️ Run Diagnostics"):
-    try:
-        st.sidebar.write("Connecting...")
-        creds_dict = dict(st.secrets["service_account"])
-        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
-        client = gspread.authorize(creds)
-        st.sidebar.success("Connected!")
-        
-        ws = client.open("SI Traders Data").worksheet("Purchase")
-        st.sidebar.write("Fetching Data...")
-        data = ws.get("A:Z") # Alternative method
-        st.sidebar.success(f"Data Found: {len(data)} rows")
-        st.sidebar.write(data)
-    except Exception as e:
-        st.sidebar.error(f"Fail: {e}")
-
-# --- 3. CONNECTION ---
+# --- 2. CONNECTION ---
 def get_connection():
     if "service_account" not in st.secrets: st.error("Secrets Missing"); st.stop()
-    creds_dict = dict(st.secrets["service_account"])
-    # Key Fixer
-    if "private_key" in creds_dict:
-        if creds_dict["private_key"].startswith("\\"): creds_dict["private_key"] = creds_dict["private_key"][1:]
-        creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+    creds = dict(st.secrets["service_account"])
+    if "private_key" in creds:
+        creds["private_key"] = creds["private_key"].replace("\\n", "\n").replace('\\', '') if creds["private_key"].startswith('\\') else creds["private_key"].replace("\\n", "\n")
     
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
-    return gspread.authorize(creds).open("SI Traders Data")
+    return gspread.authorize(Credentials.from_service_account_info(creds, scopes=scope)).open("SI Traders Data")
 
-# --- 4. HELPERS ---
+# --- 3. HELPER FUNCTIONS ---
 def get_users():
     try:
         ws = get_connection().worksheet("Users")
-        data = ws.get("A:C") # Using .get() instead of get_all_records
-        if not data: return pd.DataFrame()
+        data = ws.get_all_values()
+        if len(data) < 2: return pd.DataFrame()
         headers = data.pop(0)
         return pd.DataFrame(data, columns=headers)
     except: return pd.DataFrame()
@@ -67,15 +52,15 @@ def get_users():
 def load_data(tab):
     try:
         ws = get_connection().worksheet(tab)
-        # 🔥 ALTERNATIVE FETCH METHOD (Bypasses 200 Error)
-        raw_data = ws.get("A:H") 
+        # Use get_all_values (Safe Method)
+        raw_data = ws.get_all_values()
         
         if not raw_data: return pd.DataFrame()
         
         headers = raw_data.pop(0)
         df = pd.DataFrame(raw_data, columns=headers)
         
-        # Numbers Conversion
+        # Convert Numbers
         for c in ["Weight", "Rate", "Amount"]:
             if c in df.columns: df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0)
             
@@ -85,8 +70,9 @@ def load_data(tab):
             
         return df
     except Exception as e:
-        if "200" in str(e): return pd.DataFrame() # Ignore glitch
-        st.error(f"Load Error ({tab}): {e}")
+        # Ignore 200 Error explicitly
+        if "200" in str(e): return pd.DataFrame()
+        st.sidebar.error(f"Load Error ({tab}): {e}")
         return pd.DataFrame()
 
 def save_data(tab, row_data):
@@ -95,11 +81,11 @@ def save_data(tab, row_data):
         ws.append_row([st.session_state["username"]] + row_data)
         return True
     except Exception as e:
-        if "200" in str(e): return True # Ignore glitch
+        if "200" in str(e): return True
         st.error(f"Save Error: {e}")
         return False
 
-# --- 5. LOGIN ---
+# --- 4. LOGIN ---
 if "logged_in" not in st.session_state: st.session_state.update({"logged_in": False, "username": "", "user_role": "User"})
 
 if not st.session_state["logged_in"]:
@@ -120,7 +106,7 @@ if not st.session_state["logged_in"]:
             else: st.error("No Users Found (Check Sheet)")
     st.stop()
 
-# --- 6. MAIN APP ---
+# --- 5. MAIN APP ---
 st.sidebar.title(f"👤 {st.session_state['username']}")
 if st.sidebar.button("Logout"): st.session_state["logged_in"]=False; st.rerun()
 
