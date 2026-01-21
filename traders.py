@@ -33,25 +33,23 @@ st.markdown("""
         /* PRINT */
         .invoice-box { background: white; padding: 20px; border: 2px solid #333; }
         @media print { [data-testid="stSidebar"] { display: none; } .stApp { background: white; } .invoice-box { position: absolute; top: 0; left: 0; width: 100%; border: none; } }
+        
+        /* MOBILE TABS FIX */
+        div[role="radiogroup"] { overflow-x: auto; display: flex; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+        div[role="radiogroup"] label { min-width: 100px; text-align: center; justify-content: center; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. CONNECTION (FIXED) ---
+# --- 2. CONNECTION ---
 def get_connection():
     if "service_account" not in st.secrets: st.error("Secrets Missing"); st.stop()
     creds_dict = dict(st.secrets["service_account"])
-    
-    # Fix Key Formatting
     if "private_key" in creds_dict:
         key = creds_dict["private_key"]
         if key.startswith("\\"): key = key[1:]
         creds_dict["private_key"] = key.replace("\\n", "\n")
-    
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    
-    # 🔥 FIXED LINE: info=creds_dict (Yeh pehlay ghalat tha)
     creds = Credentials.from_service_account_info(info=creds_dict, scopes=scope)
-    
     client = gspread.authorize(creds)
     return client.open("Trade")
 
@@ -78,23 +76,16 @@ def load_data(tab):
         client = get_connection()
         ws = get_worksheet_safe(client, tab)
         if not ws: return pd.DataFrame()
-        
         raw_data = ws.get_all_values()
         if not raw_data: return pd.DataFrame()
-        
         headers = raw_data.pop(0)
         df = pd.DataFrame(raw_data, columns=headers)
-        
-        # Numeric Conversion
         for c in ["Weight", "Rate", "Amount"]:
             if c in df.columns: df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0)
-            
         if not df.empty and "Owner" in df.columns and st.session_state.get("user_role") != "Admin":
             df = df[df["Owner"] == st.session_state["username"]]
-            
         return df
-    except Exception as e:
-        return pd.DataFrame()
+    except: return pd.DataFrame()
 
 def save_data(tab, row_data):
     try:
@@ -107,7 +98,6 @@ def save_data(tab, row_data):
         st.error(f"Save Error: {e}")
         return False
 
-# 🔥 EDIT & UPDATE FUNCTION
 def update_sheet_data(tab, edited_df):
     try:
         client = get_connection()
@@ -145,27 +135,26 @@ if not st.session_state["logged_in"]:
                 else: st.warning("⚠️ No users found. Login with 'admin' / 'admin123'")
     st.stop()
 
-# --- 5. MAIN APP ---
-with st.sidebar:
-    st.title(f"👤 {st.session_state['username']}")
-    st.write("---")
-    
-    # 🔥 URDU TABS (Right to Left)
-    tabs = ["خریداری", "فروخت", "اخراجات", "منافع / حساب"]
-    if st.session_state["user_role"] == "Admin": tabs.append("Users")
-    
-    menu = st.radio("Menu", tabs)
-    st.write("---")
-    if st.button("🚪 Logout"): st.session_state["logged_in"]=False; st.rerun()
+# --- 5. MAIN NAVIGATION (TOP BAR FOR MOBILE) ---
+st.markdown(f"<div style='text-align:center;'>👤 <b>{st.session_state['username']}</b> | <a href='#' target='_self'>Reload</a></div>", unsafe_allow_html=True)
+
+# 🔥 TABS MOVED TO TOP (HORIZONTAL)
+tabs = ["خریداری", "فروخت", "اخراجات", "منافع / حساب"]
+if st.session_state["user_role"] == "Admin": tabs.append("Users")
+
+# This creates horizontal buttons, easier for mobile
+menu = st.radio("Menu", tabs, horizontal=True, label_visibility="collapsed")
+st.write("---")
+
+if st.sidebar.button("🚪 Logout"):
+    st.session_state["logged_in"] = False
+    st.rerun()
 
 if "invoice_data" not in st.session_state: st.session_state.invoice_data = None
 
 # === A. KHAREEDARI ===
 if menu == "خریداری":
-    # Urdu Header
     st.markdown("<h2>🛒 نئی خریداری</h2>", unsafe_allow_html=True)
-    
-    # English Form
     with st.form("buy"):
         c1,c2 = st.columns(2)
         party = c1.text_input("Party Name")
@@ -190,13 +179,9 @@ if menu == "خریداری":
         search = st.text_input("🔍 Search Party...", key="sb")
         if search: df = df[df.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
         
-        # 🔥 EDITABLE GRID
         edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, key="edit_buy")
-        
-        # 🔥 AUTO-CALCULATION
         edited_df["Amount"] = edited_df["Weight"] * edited_df["Rate"]
         
-        # Show updated totals
         c1,c2 = st.columns(2)
         c1.markdown(f"<div class='metric-card'><div class='metric-label'>Total Weight</div><div class='metric-value'>{edited_df['Weight'].sum():,.3f} Kg</div></div>", unsafe_allow_html=True)
         c2.markdown(f"<div class='metric-card'><div class='metric-label'>Total Amount</div><div class='metric-value'>Rs {edited_df['Amount'].sum():,.0f}</div></div>", unsafe_allow_html=True)
@@ -260,17 +245,14 @@ elif menu == "اخراجات":
     df = load_data("Expenses")
     if not df.empty:
         edited_df_exp = st.data_editor(df, num_rows="dynamic", use_container_width=True, key="edit_exp")
-        
         if st.button("💾 Update Google Sheet", key="upd_exp"):
             if update_sheet_data("Expenses", edited_df_exp):
                 st.success("Updated!"); time.sleep(1); st.rerun()
-        
         st.markdown(f"<div style='background:#fee2e2; color:#b91c1c; padding:10px; border-radius:8px; font-weight:bold; text-align:center;'>Total Expense: Rs {edited_df_exp['Amount'].sum():,.0f}</div>", unsafe_allow_html=True)
 
 # === D. CLOSING ===
 elif menu == "منافع / حساب":
     st.markdown("<h2>📒 کاروباری حساب</h2>", unsafe_allow_html=True)
-    
     b = load_data("Purchase"); s = load_data("Sale"); e = load_data("Expenses")
     
     buy_sum = b["Amount"].sum() if not b.empty else 0
