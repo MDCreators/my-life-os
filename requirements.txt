@@ -1,6 +1,6 @@
 streamlit
 pandas
-gspread==6.1.2
+gspread>=6.0.0
 google-auth
 firebase-admin
 pytz
