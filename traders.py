@@ -35,6 +35,7 @@ st.markdown("""
 def get_connection():
     if "service_account" not in st.secrets: st.error("Secrets Missing"); st.stop()
     creds_dict = dict(st.secrets["service_account"])
+    # Handle private key formatting issues
     if "private_key" in creds_dict:
         creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n").replace('\\', '') if creds_dict["private_key"].startswith('\\') else creds_dict["private_key"].replace("\\n", "\n")
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -64,25 +65,21 @@ def load_data(tab):
         return df
     except: return pd.DataFrame()
 
-# 🔥 SUPER ROBUST UPDATE FUNCTION 🔥
+# 🔥 UPDATE FUNCTION (MANUAL EDIT) 🔥
 def update_google_sheet(tab, edited_df):
     try:
         client = get_connection()
         ws = get_ws(client, tab)
         
-        # 1. Fill Missing Values for New Rows
+        # Fill missing system fields
         if "Owner" in edited_df.columns:
             edited_df["Owner"] = edited_df["Owner"].replace("", st.session_state["username"]).fillna(st.session_state["username"])
         if "Date" in edited_df.columns:
-             # Nayi row ke liye aaj ki date
              pk_tz = pytz.timezone('Asia/Karachi')
              today = datetime.now(pk_tz).strftime("%d-%b-%Y")
              edited_df["Date"] = edited_df["Date"].replace("", today).fillna(today)
 
-        # 2. Clean Data (NaN to empty string)
         clean_df = edited_df.fillna("") 
-        
-        # 3. Convert to List & Update
         data_list = [clean_df.columns.values.tolist()] + clean_df.values.tolist()
         ws.clear()
         ws.update(data_list)
@@ -91,24 +88,40 @@ def update_google_sheet(tab, edited_df):
         st.error(f"Update Error: {e}")
         return False
 
-def reset_month_archive(profit, earning):
+# 🔥 THE RESTORE (RESET) FUNCTION 🔥
+def restore_and_reset_month(profit, earning):
     client = get_connection()
     pk_tz = pytz.timezone('Asia/Karachi')
     m_name = datetime.now(pk_tz).strftime("%B_%Y")
     
+    # 1. Save Summary
     s_ws = get_ws(client, "Summary")
     if not s_ws: 
         s_ws = client.add_worksheet("Summary", 100, 5)
         s_ws.append_row(["Month", "Earning", "Profit", "Date"])
     s_ws.append_row([m_name, earning, profit, datetime.now(pk_tz).strftime("%d-%b-%Y")])
     
-    for t in ["Purchase", "Sale", "Expenses"]:
+    # 2. Archive & Clear Data
+    tabs_to_reset = ["Purchase", "Sale", "Expenses"]
+    
+    for t in tabs_to_reset:
         ws = get_ws(client, t)
         if ws:
-            d = ws.get_all_values()
-            client.add_worksheet(f"{t}_{m_name}", 1000, 10).append_rows(d)
+            # Get old data
+            old_data = ws.get_all_values()
+            
+            # Create Backup Sheet (e.g. Purchase_Jan_2026)
+            try:
+                client.add_worksheet(f"{t}_{m_name}", 1000, 10).append_rows(old_data)
+            except:
+                # If sheet exists, append random number to avoid crash
+                client.add_worksheet(f"{t}_{m_name}_{int(time.time())}", 1000, 10).append_rows(old_data)
+
+            # Clear Main Sheet & Restore Headers
+            headers = old_data[0] if old_data else []
             ws.clear()
-            ws.append_row(d[0])
+            if headers: ws.append_row(headers)
+            
     return True
 
 # --- 4. LOGIN ---
@@ -116,7 +129,7 @@ if "logged_in" not in st.session_state: st.session_state.update({"logged_in": Fa
 if not st.session_state["logged_in"]:
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
-        # 🖼️ LOGO FIX: Handles .jpeg.jpeg AND normal names
+        # Logo Logic
         if os.path.exists("logo.jpeg.jpeg"): st.image("logo.jpeg.jpeg", use_container_width=True)
         elif os.path.exists("logo.jpeg"): st.image("logo.jpeg", use_container_width=True)
         elif os.path.exists("logo.png"): st.image("logo.png", use_container_width=True)
@@ -173,7 +186,7 @@ if "خریداری" in menu:
         c1.markdown(f"<div class='total-box'>📦 کل وزن: {df['Weight'].sum():,.3f} Kg</div>", unsafe_allow_html=True)
         c2.markdown(f"<div class='total-box'>💰 کل رقم: Rs {df['Amount'].sum():,.0f}</div>", unsafe_allow_html=True)
         
-        st.info("📝 Table mein edit karein aur 'Save Changes' dabayen.")
+        st.info("📝 Neechay table mein edit karein.")
         edited_df = st.data_editor(
             df, 
             num_rows="dynamic", 
@@ -208,7 +221,6 @@ elif "فروخت" in menu:
         c1.markdown(f"<div class='total-box'>📦 کل وزن: {df['Weight'].sum():,.3f} Kg</div>", unsafe_allow_html=True)
         c2.markdown(f"<div class='total-box'>💰 کل رقم: Rs {df['Amount'].sum():,.0f}</div>", unsafe_allow_html=True)
         
-        st.info("📝 Table mein edit karein.")
         edited_df = st.data_editor(
             df, 
             num_rows="dynamic", 
@@ -257,21 +269,25 @@ elif "کلوزنگ" in menu:
     st.markdown(f"<div style='text-align:center; padding:20px; background:#c8e6c9; border-radius:10px;'><h1 style='color:green; margin:0;'>Net Profit: Rs {net:,.0f}</h1></div>", unsafe_allow_html=True)
     
     st.divider()
-    st.subheader("📜 Previous Record (Archive)")
+    st.subheader("📜 پچھلے مہینوں کا ریکارڈ")
     sdf = load_data("Summary")
     if not sdf.empty: st.dataframe(sdf, use_container_width=True)
 
-# === ADMIN ===
+# === ADMIN (RESTORE FEATURE) ===
 elif "ایڈمن" in menu:
     st.header("⚙️ Admin Panel")
-    st.warning("⚠️ Warning: This will Archive all data and reset sheets.")
+    st.subheader("🔴 Restore / Start New Month")
+    st.info("Yeh option dabane se purana data Archive mein chala jaye ga aur aap ki app bilkul nayi ho jaye gi taake aap dubara likhna shuru kar saken.")
+    st.warning("⚠️ Warning: Main sheets (Purchase/Sale) saaf ho jayen gi.")
     
     b = load_data("Purchase"); s = load_data("Sale"); e = load_data("Expenses")
     earn = s["Amount"].sum() if not s.empty else 0
     prof = earn - (b["Amount"].sum() if not b.empty else 0) - (e["Amount"].sum() if not e.empty else 0)
     
-    if st.button("🔴 Start New Month (Archive Data)"):
-        if reset_month_archive(prof, earn):
-            st.success("Month Reset Successful!"); st.balloons(); time.sleep(2); st.rerun()
+    if st.button("🔴 Restore App & Start New Month", type="primary"):
+        with st.spinner("Restoring... Please wait"):
+            if restore_and_reset_month(prof, earn):
+                st.success("App Restored! Purana data save ho gaya aur sheets saaf ho gayin."); 
+                st.balloons(); time.sleep(2); st.rerun()
 
 if st.button("🚪 Logout"): st.session_state.clear(); st.rerun()
