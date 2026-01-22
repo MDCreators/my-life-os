@@ -31,8 +31,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. CONNECTION & CACHING ---
-# Cache hata diya taake editing foran nazar aaye
+# --- 2. CONNECTION ---
 def get_connection():
     if "service_account" not in st.secrets: st.error("Secrets Missing"); st.stop()
     creds_dict = dict(st.secrets["service_account"])
@@ -56,7 +55,6 @@ def load_data(tab):
         headers = raw.pop(0)
         df = pd.DataFrame(raw, columns=headers)
         
-        # Numeric Conversion
         cols = ["Weight", "Rate", "Amount"] if tab in ["Purchase", "Sale"] else ["Amount"]
         for c in cols:
             if c in df.columns: df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0)
@@ -66,20 +64,26 @@ def load_data(tab):
         return df
     except: return pd.DataFrame()
 
-# 🔥 ROBUST SAVE FUNCTION (MANUAL EDIT FIX) 🔥
+# 🔥 SUPER ROBUST UPDATE FUNCTION 🔥
 def update_google_sheet(tab, edited_df):
     try:
         client = get_connection()
         ws = get_ws(client, tab)
         
-        # 1. Prepare Data
-        # NaN (Empty cells) ko empty string banayein warna error ayega
+        # 1. Fill Missing Values for New Rows
+        if "Owner" in edited_df.columns:
+            edited_df["Owner"] = edited_df["Owner"].replace("", st.session_state["username"]).fillna(st.session_state["username"])
+        if "Date" in edited_df.columns:
+             # Nayi row ke liye aaj ki date
+             pk_tz = pytz.timezone('Asia/Karachi')
+             today = datetime.now(pk_tz).strftime("%d-%b-%Y")
+             edited_df["Date"] = edited_df["Date"].replace("", today).fillna(today)
+
+        # 2. Clean Data (NaN to empty string)
         clean_df = edited_df.fillna("") 
         
-        # 2. Convert to List of Lists
+        # 3. Convert to List & Update
         data_list = [clean_df.columns.values.tolist()] + clean_df.values.tolist()
-        
-        # 3. Clear & Update
         ws.clear()
         ws.update(data_list)
         return True
@@ -92,21 +96,19 @@ def reset_month_archive(profit, earning):
     pk_tz = pytz.timezone('Asia/Karachi')
     m_name = datetime.now(pk_tz).strftime("%B_%Y")
     
-    # Save Summary
     s_ws = get_ws(client, "Summary")
     if not s_ws: 
         s_ws = client.add_worksheet("Summary", 100, 5)
         s_ws.append_row(["Month", "Earning", "Profit", "Date"])
     s_ws.append_row([m_name, earning, profit, datetime.now(pk_tz).strftime("%d-%b-%Y")])
     
-    # Archive Tabs
     for t in ["Purchase", "Sale", "Expenses"]:
         ws = get_ws(client, t)
         if ws:
             d = ws.get_all_values()
             client.add_worksheet(f"{t}_{m_name}", 1000, 10).append_rows(d)
             ws.clear()
-            ws.append_row(d[0]) # Restore headers
+            ws.append_row(d[0])
     return True
 
 # --- 4. LOGIN ---
@@ -114,8 +116,9 @@ if "logged_in" not in st.session_state: st.session_state.update({"logged_in": Fa
 if not st.session_state["logged_in"]:
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
-        # 🖼️ LOGO HANDLING (JPEG or PNG)
-        if os.path.exists("logo.jpeg"): st.image("logo.jpeg", use_container_width=True)
+        # 🖼️ LOGO FIX: Handles .jpeg.jpeg AND normal names
+        if os.path.exists("logo.jpeg.jpeg"): st.image("logo.jpeg.jpeg", use_container_width=True)
+        elif os.path.exists("logo.jpeg"): st.image("logo.jpeg", use_container_width=True)
         elif os.path.exists("logo.png"): st.image("logo.png", use_container_width=True)
         
         st.markdown("<h2 style='text-align: center;'>SI Traders Login</h2>", unsafe_allow_html=True)
@@ -137,16 +140,15 @@ if not st.session_state["logged_in"]:
 pk_tz = pytz.timezone('Asia/Karachi')
 f_date = datetime.now(pk_tz).strftime("%d-%b-%Y")
 
-# Header
 c1, c2 = st.columns([1,4])
 with c1:
-    if os.path.exists("logo.jpeg"): st.image("logo.jpeg", width=120)
+    if os.path.exists("logo.jpeg.jpeg"): st.image("logo.jpeg.jpeg", width=120)
+    elif os.path.exists("logo.jpeg"): st.image("logo.jpeg", width=120)
     elif os.path.exists("logo.png"): st.image("logo.png", width=120)
 with c2:
     st.markdown(f"## {st.session_state['username']}")
     st.caption(f"📅 Date: {f_date}")
 
-# Navigation
 opts = ["خریداری (Purchase)", "فروخت (Sale)", "اخراجات (Expenses)", "کلوزنگ (Closing)"]
 if st.session_state["user_role"] == "Admin": opts.append("ایڈمن پینل (Admin)")
 menu = st.selectbox("", opts, label_visibility="collapsed")
@@ -167,27 +169,22 @@ if "خریداری" in menu:
     df = load_data("Purchase")
     if not df.empty:
         st.markdown("---")
-        # Totals
         c1, c2 = st.columns(2)
         c1.markdown(f"<div class='total-box'>📦 کل وزن: {df['Weight'].sum():,.3f} Kg</div>", unsafe_allow_html=True)
         c2.markdown(f"<div class='total-box'>💰 کل رقم: Rs {df['Amount'].sum():,.0f}</div>", unsafe_allow_html=True)
         
-        st.info("📝 Neechay table mein click kar ke edit karein aur 'Save Changes' dabayen.")
-        
-        # EDITABLE GRID
+        st.info("📝 Table mein edit karein aur 'Save Changes' dabayen.")
         edited_df = st.data_editor(
             df, 
             num_rows="dynamic", 
             use_container_width=True,
             column_config={
-                "Amount": st.column_config.NumberColumn(disabled=True), # Auto Calc
+                "Amount": st.column_config.NumberColumn(disabled=True),
                 "Owner": st.column_config.TextColumn(disabled=True),
                 "Date": st.column_config.TextColumn(disabled=True)
             }
         )
-        
         if st.button("💾 Save Changes to Sheet", type="primary"):
-            # Auto Calc Amount before saving
             edited_df["Amount"] = edited_df["Weight"] * edited_df["Rate"]
             if update_google_sheet("Purchase", edited_df):
                 st.success("Updated Successfully!"); time.sleep(1); st.rerun()
@@ -222,7 +219,6 @@ elif "فروخت" in menu:
                 "Date": st.column_config.TextColumn(disabled=True)
             }
         )
-        
         if st.button("💾 Save Changes to Sheet", type="primary"):
             edited_df["Amount"] = edited_df["Weight"] * edited_df["Rate"]
             if update_google_sheet("Sale", edited_df):
