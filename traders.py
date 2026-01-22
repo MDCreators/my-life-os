@@ -64,9 +64,11 @@ def load_data(tab):
         if len(raw) < 2: return pd.DataFrame()
         headers = raw.pop(0)
         df = pd.DataFrame(raw, columns=headers)
-        cols = ["Weight", "Rate", "Amount"]
+        
+        cols = ["Weight", "Rate", "Amount"] if tab in ["Purchase", "Sale"] else ["Amount"]
         for c in cols:
             if c in df.columns: df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0)
+            
         if st.session_state.get("user_role") != "Admin" and "Owner" in df.columns:
             df = df[df["Owner"] == st.session_state["username"]]
         return df
@@ -91,25 +93,16 @@ def update_google_sheet(tab, edited_df):
         st.error(f"Update Error: {e}")
         return False
 
-# 🔥 NEW: ARCHIVE SINGLE TAB ONLY 🔥
 def archive_single_tab(tab_name):
     try:
         client = get_connection()
         ws = get_ws(client, tab_name)
         if not ws: return False
-        
-        # Get Data
         old_data = ws.get_all_values()
-        if len(old_data) <= 1: return False # No data to archive
-        
+        if len(old_data) <= 1: return False 
         pk_tz = pytz.timezone('Asia/Karachi')
         timestamp = datetime.now(pk_tz).strftime("%Y-%m-%d_%H%M")
-        archive_name = f"{tab_name}_Archived_{timestamp}"
-        
-        # Create Backup
-        client.add_worksheet(archive_name, 1000, 10).append_rows(old_data)
-        
-        # Clear Main Sheet & Restore Headers
+        client.add_worksheet(f"{tab_name}_Archived_{timestamp}", 1000, 10).append_rows(old_data)
         headers = old_data[0]
         ws.clear()
         ws.append_row(headers)
@@ -119,25 +112,20 @@ def archive_single_tab(tab_name):
         return False
 
 def reset_month_archive(profit, earning):
-    # (Yeh purana full reset function bhi rakha hai Admin ke liye)
     client = get_connection()
     pk_tz = pytz.timezone('Asia/Karachi')
     m_name = datetime.now(pk_tz).strftime("%B_%Y")
-    
     s_ws = get_ws(client, "Summary")
     if not s_ws: 
         s_ws = client.add_worksheet("Summary", 100, 5)
         s_ws.append_row(["Month", "Earning", "Profit", "Date"])
     s_ws.append_row([m_name, earning, profit, datetime.now(pk_tz).strftime("%d-%b-%Y")])
-    
     for t in ["Purchase", "Sale", "Expenses"]:
         ws = get_ws(client, t)
         if ws:
             d = ws.get_all_values()
-            try:
-                client.add_worksheet(f"{t}_{m_name}", 1000, 10).append_rows(d)
-            except:
-                client.add_worksheet(f"{t}_{m_name}_{int(time.time())}", 1000, 10).append_rows(d)
+            try: client.add_worksheet(f"{t}_{m_name}", 1000, 10).append_rows(d)
+            except: client.add_worksheet(f"{t}_{m_name}_{int(time.time())}", 1000, 10).append_rows(d)
             ws.clear()
             ws.append_row(d[0])
     return True
@@ -150,7 +138,6 @@ if not st.session_state["logged_in"]:
         if os.path.exists("logo.jpeg.jpeg"): st.image("logo.jpeg.jpeg", use_container_width=True)
         elif os.path.exists("logo.jpeg"): st.image("logo.jpeg", use_container_width=True)
         elif os.path.exists("logo.png"): st.image("logo.png", use_container_width=True)
-        
         st.markdown("<h2 style='text-align: center;'>SI Traders Login</h2>", unsafe_allow_html=True)
         u = st.text_input("Username")
         p = st.text_input("Password", type="password")
@@ -195,36 +182,26 @@ if "خریداری" in menu:
             ws = get_ws(get_connection(), "Purchase")
             ws.append_row([st.session_state["username"], f_date, party, w, r, w*r, ""])
             st.success("Saved!"); time.sleep(0.5); st.rerun()
-
     df = load_data("Purchase")
     if not df.empty:
         st.markdown("---")
         c1, c2 = st.columns(2)
         c1.markdown(f"<div class='total-box'>📦 کل وزن: {df['Weight'].sum():,.3f} Kg</div>", unsafe_allow_html=True)
         c2.markdown(f"<div class='total-box'>💰 کل رقم: Rs {df['Amount'].sum():,.0f}</div>", unsafe_allow_html=True)
-        
-        st.info("📝 Edit karne ke liye table mein type karein aur Save dabayen.")
+        st.info("📝 Table mein edit karein.")
         edited_df = st.data_editor(
             df, num_rows="dynamic", use_container_width=True,
-            column_config={
-                "Amount": st.column_config.NumberColumn(disabled=True),
-                "Owner": st.column_config.TextColumn(disabled=True),
-                "Date": st.column_config.TextColumn(disabled=True)
-            }
+            column_config={"Amount": st.column_config.NumberColumn(disabled=True), "Owner": st.column_config.TextColumn(disabled=True), "Date": st.column_config.TextColumn(disabled=True)}
         )
         if st.button("💾 Save Changes to Sheet", type="primary"):
             edited_df["Amount"] = edited_df["Weight"] * edited_df["Rate"]
-            if update_google_sheet("Purchase", edited_df):
-                st.success("Updated!"); time.sleep(1); st.rerun()
-                
-    # 🔥 SINGLE TAB RESTORE BUTTON 🔥
+            if update_google_sheet("Purchase", edited_df): st.success("Updated!"); time.sleep(1); st.rerun()
     st.markdown("---")
     with st.expander("🔴 Reset/Restore Purchase Data (Only)"):
-        st.warning("Yeh button sirf Purchase ka data Archive mein bhej de ga aur list saaf kar de ga.")
+        st.warning("Archive Purchase list only.")
         if st.button("Archive & Reset Purchase", key="reset_pur"):
-            if archive_single_tab("Purchase"):
-                st.success("Purchase List Reset & Archived!"); time.sleep(1); st.rerun()
-            else: st.error("Koi data nahi mila archive karne ke liye.")
+            if archive_single_tab("Purchase"): st.success("Done!"); time.sleep(1); st.rerun()
+            else: st.error("No data.")
 
 # === SALE ===
 elif "فروخت" in menu:
@@ -237,35 +214,25 @@ elif "فروخت" in menu:
             ws = get_ws(get_connection(), "Sale")
             ws.append_row([st.session_state["username"], f_date, cust, bill, w, r, w*r, ""])
             st.success("Saved!"); time.sleep(0.5); st.rerun()
-
     df = load_data("Sale")
     if not df.empty:
         st.markdown("---")
         c1, c2 = st.columns(2)
         c1.markdown(f"<div class='total-box'>📦 کل وزن: {df['Weight'].sum():,.3f} Kg</div>", unsafe_allow_html=True)
         c2.markdown(f"<div class='total-box'>💰 کل رقم: Rs {df['Amount'].sum():,.0f}</div>", unsafe_allow_html=True)
-        
         edited_df = st.data_editor(
             df, num_rows="dynamic", use_container_width=True,
-            column_config={
-                "Amount": st.column_config.NumberColumn(disabled=True),
-                "Owner": st.column_config.TextColumn(disabled=True),
-                "Date": st.column_config.TextColumn(disabled=True)
-            }
+            column_config={"Amount": st.column_config.NumberColumn(disabled=True), "Owner": st.column_config.TextColumn(disabled=True), "Date": st.column_config.TextColumn(disabled=True)}
         )
         if st.button("💾 Save Changes to Sheet", type="primary"):
             edited_df["Amount"] = edited_df["Weight"] * edited_df["Rate"]
-            if update_google_sheet("Sale", edited_df):
-                st.success("Updated!"); time.sleep(1); st.rerun()
-    
-    # 🔥 SINGLE TAB RESTORE BUTTON 🔥
+            if update_google_sheet("Sale", edited_df): st.success("Updated!"); time.sleep(1); st.rerun()
     st.markdown("---")
     with st.expander("🔴 Reset/Restore Sale Data (Only)"):
-        st.warning("Yeh button sirf Sale ka data Archive mein bhej de ga aur list saaf kar de ga.")
+        st.warning("Archive Sale list only.")
         if st.button("Archive & Reset Sale", key="reset_sale"):
-            if archive_single_tab("Sale"):
-                st.success("Sale List Reset & Archived!"); time.sleep(1); st.rerun()
-            else: st.error("Koi data nahi mila.")
+            if archive_single_tab("Sale"): st.success("Done!"); time.sleep(1); st.rerun()
+            else: st.error("No data.")
 
 # === EXPENSES ===
 elif "اخراجات" in menu:
@@ -277,46 +244,58 @@ elif "اخراجات" in menu:
             ws = get_ws(get_connection(), "Expenses")
             ws.append_row([st.session_state["username"], f_date, cat, amt, det])
             st.rerun()
-            
     df = load_data("Expenses")
     if not df.empty:
         edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, column_config={"Owner": st.column_config.TextColumn(disabled=True)})
         if st.button("💾 Save Changes", type="primary"):
             if update_google_sheet("Expenses", edited_df): st.success("Updated!"); st.rerun()
-
-    # 🔥 SINGLE TAB RESTORE BUTTON 🔥
     st.markdown("---")
     with st.expander("🔴 Reset/Restore Expenses Data (Only)"):
-        st.warning("Yeh button sirf Expenses ka data Archive mein bhej de ga aur list saaf kar de ga.")
+        st.warning("Archive Expenses list only.")
         if st.button("Archive & Reset Expenses", key="reset_exp"):
-            if archive_single_tab("Expenses"):
-                st.success("Expenses Reset & Archived!"); time.sleep(1); st.rerun()
-            else: st.error("Koi data nahi mila.")
+            if archive_single_tab("Expenses"): st.success("Done!"); time.sleep(1); st.rerun()
+            else: st.error("No data.")
 
-# === CLOSING ===
+# === CLOSING (WITH STOCK LOGIC) ===
 elif "کلوزنگ" in menu:
-    st.markdown("### 📒 ماہانہ رپورٹ")
+    st.markdown("### 📒 ماہانہ رپورٹ (Monthly Report)")
     b = load_data("Purchase"); s = load_data("Sale"); e = load_data("Expenses")
+    
+    # --- CALCULATION LOGIC ---
     tb = b["Amount"].sum() if not b.empty else 0
     ts = s["Amount"].sum() if not s.empty else 0
     te = e["Amount"].sum() if not e.empty else 0
+    
+    # Weight Calculation for Stock
+    buy_weight = b["Weight"].sum() if not b.empty and "Weight" in b.columns else 0
+    sell_weight = s["Weight"].sum() if not s.empty and "Weight" in s.columns else 0
+    stock_in_hand = buy_weight - sell_weight # Yeh hai wo cheez jo client maang raha tha
+    
     net = ts - tb - te
     
+    # --- DISPLAY METRICS ---
     col1, col2, col3 = st.columns(3)
-    col1.metric("Total Purchase", f"{tb:,.0f}")
-    col2.metric("Total Sale", f"{ts:,.0f}")
-    col3.metric("Shop Expense", f"{te:,.0f}")
-    st.markdown(f"<div style='text-align:center; padding:20px; background:#c8e6c9; border-radius:10px;'><h1 style='color:green; margin:0;'>Net Profit: Rs {net:,.0f}</h1></div>", unsafe_allow_html=True)
+    col1.metric("Total Sales", f"Rs {ts:,.0f}")
+    col2.metric("Net Profit", f"Rs {net:,.0f}")
+    col3.metric("Shop Expense", f"Rs {te:,.0f}")
+
+    # 🔥 STOCK CARD (New Feature)
+    st.markdown(f"""
+    <div style='text-align:center; padding:20px; background:#e3f2fd; border-radius:15px; border: 2px solid #1565c0; margin-top:10px;'>
+        <h3 style='color:#1565c0; margin:0;'>📦 Stock in Hand (Bacha hua Maal)</h3>
+        <h1 style='color:#0d47a1; margin:0;'>{stock_in_hand:,.3f} Kg</h1>
+        <p style='margin:0;'>Total Bought ({buy_weight:,.0f}) - Total Sold ({sell_weight:,.0f})</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     st.divider()
-    
     st.subheader("🗄️ Purana Record (View Archives)")
     st.markdown("**🔹 Summary Table:**")
     sdf = load_data("Summary")
     if not sdf.empty: st.dataframe(sdf, use_container_width=True)
     
     st.markdown("---")
-    st.markdown("**🔹 Detailed History (Select Sheet):**")
+    st.markdown("**🔹 Detailed History:**")
     archive_list = get_all_sheet_names()
     if archive_list:
         selected_sheet = st.selectbox("Sheet Select Karein:", ["Select..."] + archive_list)
@@ -324,8 +303,7 @@ elif "کلوزنگ" in menu:
             st.write(f"📜 Showing Data for: **{selected_sheet}**")
             archive_df = load_data(selected_sheet)
             st.dataframe(archive_df, use_container_width=True)
-            if "Amount" in archive_df.columns:
-                 st.info(f"💰 Is Sheet ka Total Amount: Rs {archive_df['Amount'].sum():,.0f}")
+            if "Amount" in archive_df.columns: st.info(f"💰 Total Amount: Rs {archive_df['Amount'].sum():,.0f}")
     else:
         st.caption("Abhi koi Archived sheets mojood nahi hain.")
 
@@ -333,7 +311,6 @@ elif "کلوزنگ" in menu:
 elif "ایڈمن" in menu:
     st.header("⚙️ Admin Panel")
     st.subheader("🔴 Full App Reset / New Month")
-    st.warning("⚠️ Warning: Yeh saari sheets (Sale, Purchase, Expense) ko aik sath Archive kar ke reset kar de ga.")
     
     b = load_data("Purchase"); s = load_data("Sale"); e = load_data("Expenses")
     earn = s["Amount"].sum() if not s.empty else 0
@@ -342,6 +319,6 @@ elif "ایڈمن" in menu:
     if st.button("🔴 Full App Restore & New Month", type="primary"):
         with st.spinner("Restoring..."):
             if reset_month_archive(prof, earn):
-                st.success("Full Month Reset Successful!"); st.balloons(); time.sleep(2); st.rerun()
+                st.success("Month Reset Successful!"); st.balloons(); time.sleep(2); st.rerun()
 
 if st.button("🚪 Logout"): st.session_state.clear(); st.rerun()
