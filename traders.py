@@ -5,42 +5,61 @@ import pytz
 import gspread
 from google.oauth2.service_account import Credentials
 import time
+import os
 
 # --- 1. CONFIGURATION ---
-st.set_page_config(page_title="SI Traders", page_icon="⚖️", layout="wide")
+st.set_page_config(page_title="SI Traders Pro", page_icon="⚖️", layout="wide")
 
-# --- 🎨 MOBILE & PC OPTIMIZED STYLING ---
+# --- 🎨 PRO STYLING & REFINEMENT ---
 st.markdown("""
     <style>
-        .stApp { background-color: #ffffff !important; color: #000000 !important; }
-        h1, h2, h3, h4, h5, h6, p, div, span, label { color: #000000 !important; font-family: 'Arial', sans-serif; }
+        .stApp { background-color: #f8f9fa !important; color: #212529 !important; }
+        h1, h2, h3, h4, h5, h6 { color: #1a4d2e !important; font-family: 'Arial', sans-serif; font-weight: 800; }
+        p, div, span, label, th, td { color: #212529 !important; font-family: 'Arial', sans-serif; font-weight: 600; }
         
-        /* Navigation Box Styling */
-        div[data-testid="stSelectbox"] {
-            background-color: #f8f9fa;
-            border: 2px solid #2e7d32;
+        /* Navigation Box Styling (Top Menu) */
+        div[data-testid="stSelectbox"] > div > div {
+            background-color: #1a4d2e !important;
+            color: white !important;
             border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        /* Cards & Totals */
+        .metric-card { 
+            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+            border: 2px solid #1a4d2e; padding: 20px; 
+            border-radius: 15px; text-align: center; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-bottom: 15px;
+        }
+        .metric-value { font-size: 28px; font-weight: 900; color: #1a4d2e !important; }
+        .total-box {
+            background-color: #ffffff; padding: 15px; border-radius: 12px;
+            border-left: 8px solid #1a4d2e; margin-bottom: 20px; 
+            font-weight: bold; font-size: 20px; color: #1a4d2e;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        
+        /* Buttons & Inputs */
+        .stButton>button { 
+            border-radius: 10px; font-weight: bold; font-size: 16px;
+            background-color: #1a4d2e; color: white; border: none;
+            padding: 10px 20px; transition: all 0.3s ease;
+        }
+        .stButton>button:hover { background-color: #143d23; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        
+        .stTextInput input, .stNumberInput input, .stSelectbox div { 
+            border: 2px solid #1a4d2e !important; border-radius: 8px; color: black !important;
         }
 
-        .metric-card { 
-            background-color: #f8f9fa; border: 2px solid #2e7d32; padding: 15px; 
-            border-radius: 12px; text-align: center; margin-bottom: 10px; 
-        }
-        .metric-value { font-size: 24px; font-weight: 800; color: #2e7d32 !important; }
-        
-        /* Force Input High Contrast */
-        input { color: black !important; border: 2px solid #000 !important; }
-        
-        .total-box {
-            background-color: #e8f5e9; padding: 12px; border-radius: 10px;
-            border-left: 6px solid #2e7d32; margin-bottom: 15px; font-weight: bold; font-size: 18px;
-        }
-        
+        /* Hide Streamlit Branding */
         #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
 
 # --- 2. CONNECTION ---
+@st.cache_resource
 def get_connection():
     if "service_account" not in st.secrets: st.error("Secrets Missing"); st.stop()
     creds_dict = dict(st.secrets["service_account"])
@@ -62,26 +81,38 @@ def load_data(tab):
         if len(raw) < 2: return pd.DataFrame()
         headers = raw.pop(0)
         df = pd.DataFrame(raw, columns=headers)
-        for c in ["Weight", "Rate", "Amount"]:
+        # Convert numeric columns
+        cols_to_num = ["Weight", "Rate", "Amount"] if tab in ["Purchase", "Sale"] else ["Amount"]
+        for c in cols_to_num:
             if c in df.columns: df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0)
-        if st.session_state.get("user_role") != "Admin":
+        
+        if st.session_state.get("user_role") != "Admin" and "Owner" in df.columns:
             df = df[df["Owner"] == st.session_state["username"]]
         return df
     except: return pd.DataFrame()
 
-def save_data(tab, row_data):
+# 🔥 NEW FUNCTION FOR MANUAL EDITING 🔥
+def update_whole_sheet(tab, edited_df):
     try:
-        ws = get_ws(get_connection(), tab)
-        ws.append_row([st.session_state["username"]] + row_data)
-        return True
-    except: return False
+        client = get_connection()
+        ws = get_ws(client, tab)
+        # Ensure Owner column is preserved correctly
+        if "Owner" not in edited_df.columns:
+             edited_df["Owner"] = st.session_state["username"]
 
-def delete_entry(tab, row_index):
-    try:
-        ws = get_ws(get_connection(), tab)
-        ws.delete_rows(row_index + 2)
+        # Recalculate Amounts if Weight/Rate changed
+        if tab in ["Purchase", "Sale"]:
+             edited_df["Amount"] = edited_df["Weight"] * edited_df["Rate"]
+
+        # Convert DF back to list of lists for GSheets
+        data_to_upload = [edited_df.columns.tolist()] + edited_df.values.tolist()
+        
+        ws.clear() # Clear old data
+        ws.update(range_name='A1', values=data_to_upload) # Upload new edited data
         return True
-    except: return False
+    except Exception as e:
+        st.error(f"Update failed: {e}")
+        return False
 
 def reset_month_and_archive(profit, earning):
     client = get_connection()
@@ -108,10 +139,12 @@ if "logged_in" not in st.session_state: st.session_state.update({"logged_in": Fa
 if not st.session_state["logged_in"]:
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
+        # 🖼️ LOGO PLACEHOLDER (Login Screen)
+        if os.path.exists("logo.png"): st.image("logo.png", width=200)
         st.title("⚖️ SI Traders Login")
         u = st.text_input("Username")
         p = st.text_input("Password", type="password")
-        if st.button("Login"):
+        if st.button("🔐 Login"):
             if u == "admin" and p == "admin123":
                 st.session_state.update({"logged_in":True, "username":"Admin", "user_role":"Admin"}); st.rerun()
             ws = get_ws(get_connection(), "Users")
@@ -123,112 +156,171 @@ if not st.session_state["logged_in"]:
             st.error("Invalid Credentials")
     st.stop()
 
-# --- 5. MAIN APP NAVIGATION (TOP OF PAGE FOR MOBILE) ---
+# --- 5. MAIN APP ---
 pk_tz = pytz.timezone('Asia/Karachi')
-f_date = datetime.now(pk_tz).strftime("%d-%b-%Y") # Format: 21-Jan-2026
+f_date = datetime.now(pk_tz).strftime("%d-%b-%Y")
 
-st.markdown(f"### 👤 {st.session_state['username']} | 📅 {f_date}")
+# 🖼️ HEADER WITH LOGO & DATE
+c_h1, c_h2 = st.columns([1, 3])
+with c_h1:
+    # Agar logo.png file mojood hogi to yahan show hogi
+    if os.path.exists("logo.png"): st.image("logo.png", width=150)
+with c_h2:
+    st.title("SI Traders Management System")
+    st.caption(f"👤 Logged in as: {st.session_state['username']} | 📅 Date: {f_date}")
 
-# 🔥 NAVIGATION FIX: Top Selectbox instead of Sidebar Radio
-menu_options = ["خریداری (Purchase)", "فروخت (Sale)", "اخراجات (Expenses)", "کلوزنگ (Closing)"]
-if st.session_state["user_role"] == "Admin": 
-    menu_options.append("ایڈمن پینل (Admin)")
-
-menu = st.selectbox("Menu Chunain (Choose Menu):", menu_options)
-
-if st.button("🚪 Logout"): st.session_state.clear(); st.rerun()
+# 📱 TOP NAVIGATION (MOBILE FIX)
+menu_options = ["🛒 خریداری (Purchase)", "🏷️ فروخت (Sale)", "💸 اخراجات (Expenses)", "📒 کلوزنگ (Closing)"]
+if st.session_state["user_role"] == "Admin": menu_options.append("⚙️ ایڈمن پینل (Admin)")
+menu = st.selectbox("▼ مینیو منتخب کریں (Select Menu)", menu_options)
 st.divider()
 
 # === A. PURCHASE (خریداری) ===
 if "خریداری" in menu:
-    st.header("نئی خریداری")
-    with st.form("buy", clear_on_submit=True):
-        party = st.text_input("Party Name")
-        c1, c2 = st.columns(2)
-        w = c1.number_input("Wazan (Weight)", format="%.3f"); r = c2.number_input("Rate")
-        if st.form_submit_button("💾 Save Entry"):
-            if save_data("Purchase", [f_date, party, w, r, w*r, ""]):
-                st.success("Saved!"); time.sleep(1); st.rerun()
+    st.header("🛒 خریداری کا ریکارڈ")
     
+    # 1. Add New Entry Form (Quick Add)
+    with st.expander("➕ نئی خریداری شامل کریں (Add New Purchase)", expanded=False):
+        with st.form("buy_quick", clear_on_submit=True):
+            party_q = st.text_input("Party Name")
+            c1q, c2q = st.columns(2)
+            w_q = c1q.number_input("Weight", format="%.3f"); r_q = c2q.number_input("Rate")
+            if st.form_submit_button("💾 Save Entry"):
+                ws = get_ws(get_connection(), "Purchase")
+                ws.append_row([st.session_state["username"], f_date, party_q, w_q, r_q, w_q*r_q, "Quick Add"])
+                st.success("Saved!"); time.sleep(0.5); st.rerun()
+
+    # 2. Data Viewer & Editor
     df = load_data("Purchase")
     if not df.empty:
-        st.subheader("🔍 Search & Totals")
-        search = st.text_input("Search Party Name...")
-        if search: df = df[df['Party Name'].str.contains(search, case=False)]
+        # Totals Section
+        c_t1, c_t2 = st.columns(2)
+        c_t1.markdown(f"<div class='total-box'>📦 کل وزن: {df['Weight'].sum():,.3f} Kg</div>", unsafe_allow_html=True)
+        c_t2.markdown(f"<div class='total-box'>💰 کل رقم: Rs {df['Amount'].sum():,.0f}</div>", unsafe_allow_html=True)
+
+        st.subheader("📝 ریکارڈ میں تبدیلی کریں (Edit Record)")
+        st.info("💡 Tip: آپ نیچے دیے گئے ٹیبل میں براہ راست کلک کر کے ڈیٹا تبدیل کر سکتے ہیں۔ تبدیلی کے بعد 'Save Changes' کا بٹن دبائیں۔")
         
-        # Live Totals on Page
-        st.markdown(f"<div class='total-box'>Kul Wazan (Total Weight): {df['Weight'].sum():,.3f} Kg</div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='total-box'>Kul Raqam (Total Amount): Rs {df['Amount'].sum():,.0f}</div>", unsafe_allow_html=True)
-        
-        st.dataframe(df, use_container_width=True)
-        # Manual Delete
-        idx = st.selectbox("Select Row to Delete", range(len(df)), format_func=lambda x: f"Delete: {df.iloc[x]['Party Name']}")
-        if st.button("🗑️ Delete Selected Entry"):
-            if delete_entry("Purchase", idx): st.success("Deleted!"); st.rerun()
+        # 🔥 THE MAGIC EDITOR 🔥
+        edited_df = st.data_editor(
+            df,
+            num_rows="dynamic", # Allows adding/deleting rows in grid
+            use_container_width=True,
+            key="purchase_editor",
+            column_config={
+                "Amount": st.column_config.NumberColumn(disabled=True), # Amount auto-calculates
+                "Owner": st.column_config.TextColumn(disabled=True),
+                "Date": st.column_config.TextColumn(disabled=True)
+            }
+        )
+
+        if st.button("💾 Save Changes to Google Sheet", type="primary"):
+            with st.spinner("Saving changes to cloud..."):
+                if update_whole_sheet("Purchase", edited_df):
+                    st.success("✅ تمام تبدیلیاں محفوظ کر لی گئی ہیں!"); time.sleep(1); st.rerun()
 
 # === B. SALE (فروخت) ===
 elif "فروخت" in menu:
-    st.header("نئی فروخت")
-    with st.form("sell", clear_on_submit=True):
-        cust = st.text_input("Customer Name"); bill = st.text_input("Bill No")
-        c1, c2 = st.columns(2)
-        w = c1.number_input("Weight", format="%.3f"); r = c2.number_input("Rate")
-        if st.form_submit_button("💾 Save Sale"):
-            if save_data("Sale", [f_date, cust, bill, w, r, w*r, ""]):
-                st.success("Saved!"); time.sleep(1); st.rerun()
+    st.header("🏷️ فروخت کا ریکارڈ")
+    
+    # 1. Add New Entry
+    with st.expander("➕ نئی فروخت شامل کریں (Add New Sale)", expanded=False):
+        with st.form("sell_quick", clear_on_submit=True):
+            cust_q = st.text_input("Customer Name"); bill_q = st.text_input("Bill No")
+            c1q, c2q = st.columns(2)
+            w_q = c1q.number_input("Weight", format="%.3f"); r_q = c2q.number_input("Rate")
+            if st.form_submit_button("💾 Save Sale"):
+                ws = get_ws(get_connection(), "Sale")
+                ws.append_row([st.session_state["username"], f_date, cust_q, bill_q, w_q, r_q, w_q*r_q, "Quick Add"])
+                st.success("Saved!"); time.sleep(0.5); st.rerun()
 
+    # 2. Data Editor
     df = load_data("Sale")
     if not df.empty:
-        search = st.text_input("Search Customer/Bill No...")
-        if search: df = df[df['Customer Name'].str.contains(search, case=False) | df['Bill No'].str.contains(search, case=False)]
-        
-        st.markdown(f"<div class='total-box'>Kul Wazan: {df['Weight'].sum():,.3f} Kg</div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='total-box'>Kul Bill Amount: Rs {df['Amount'].sum():,.0f}</div>", unsafe_allow_html=True)
-        
-        st.dataframe(df, use_container_width=True)
-        idx = st.selectbox("Select Row to Delete", range(len(df)), format_func=lambda x: f"Delete: {df.iloc[x]['Customer Name']}")
-        if st.button("🗑️ Delete Selected Entry"):
-            if delete_entry("Sale", idx): st.success("Deleted!"); st.rerun()
+        c_t1, c_t2 = st.columns(2)
+        c_t1.markdown(f"<div class='total-box'>📦 کل وزن: {df['Weight'].sum():,.3f} Kg</div>", unsafe_allow_html=True)
+        c_t2.markdown(f"<div class='total-box'>💰 کل بل: Rs {df['Amount'].sum():,.0f}</div>", unsafe_allow_html=True)
+
+        st.subheader("📝 ریکارڈ میں تبدیلی کریں (Edit Record)")
+        st.info("💡 Tip: ٹیبل میں براہ راست تبدیلی کریں اور نیچے سیو کا بٹن دبائیں۔")
+
+        edited_df_s = st.data_editor(
+            df,
+            num_rows="dynamic",
+            use_container_width=True,
+            key="sale_editor",
+            column_config={
+                "Amount": st.column_config.NumberColumn(disabled=True),
+                "Owner": st.column_config.TextColumn(disabled=True),
+                "Date": st.column_config.TextColumn(disabled=True)
+            }
+        )
+        if st.button("💾 Save Changes to Google Sheet", key="save_sale", type="primary"):
+             with st.spinner("Updating cloud records..."):
+                if update_whole_sheet("Sale", edited_df_s):
+                    st.success("✅ فروخت کا ریکارڈ اپ ڈیٹ ہو گیا!"); time.sleep(1); st.rerun()
 
 # === C. EXPENSES (اخراجات) ===
 elif "اخراجات" in menu:
-    st.header("روزانہ کے اخراجات")
-    with st.form("exp"):
-        cat = st.selectbox("Category", ["Shop", "Imran Ali", "Salman Khan"])
-        amt = st.number_input("Amount")
+    st.header("💸 اخراجات کا ریکارڈ")
+    
+    with st.form("exp_quick", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        cat_q = c1.selectbox("Category", ["Shop", "Imran Ali", "Salman Khan", "Other"])
+        amt_q = c2.number_input("Amount")
+        det_q = st.text_input("Details")
         if st.form_submit_button("Save Expense"):
-            if save_data("Expenses", [f_date, cat, amt, ""]):
-                st.success("Saved!"); time.sleep(1); st.rerun()
-    st.dataframe(load_data("Expenses"), use_container_width=True)
+             ws = get_ws(get_connection(), "Expenses")
+             ws.append_row([st.session_state["username"], f_date, cat_q, amt_q, det_q])
+             st.rerun()
+
+    df = load_data("Expenses")
+    if not df.empty:
+         st.subheader("📝 اخراجات میں تبدیلی کریں (Edit Expenses)")
+         edited_df_e = st.data_editor(df, num_rows="dynamic", use_container_width=True, key="exp_editor", column_config={"Owner": st.column_config.TextColumn(disabled=True), "Date": st.column_config.TextColumn(disabled=True)})
+         if st.button("💾 Save Changes", key="save_exp", type="primary"):
+             if update_whole_sheet("Expenses", edited_df_e):
+                 st.success("✅ خرچہ اپ ڈیٹ ہو گیا!"); time.sleep(1); st.rerun()
 
 # === D. CLOSING (کلوزنگ) ===
 elif "کلوزنگ" in menu:
-    st.header("ماہانہ رپورٹ (Monthly Report)")
+    st.header("📒 ماہانہ رپورٹ (Monthly Financials)")
     b = load_data("Purchase"); s = load_data("Sale"); e = load_data("Expenses")
     tb = b["Amount"].sum() if not b.empty else 0
     ts = s["Amount"].sum() if not s.empty else 0
     te = e["Amount"].sum() if not e.empty else 0
     profit = ts - tb - te
     
-    c1, c2 = st.columns(2)
-    c1.markdown(f"<div class='metric-card'><h4>Total Earning</h4><div class='metric-value'>Rs {ts:,}</div></div>", unsafe_allow_html=True)
-    c2.markdown(f"<div class='metric-card'><h4>Net Profit (Saaf Munafa)</h4><div class='metric-value' style='color:green !important;'>Rs {profit:,}</div></div>", unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3)
+    c1.markdown(f"<div class='metric-card'><h4>Total Purchase</h4><div class='metric-value' style='color:#d32f2f !important'>Rs {tb:,.0f}</div></div>", unsafe_allow_html=True)
+    c2.markdown(f"<div class='metric-card'><h4>Total Sales (Earning)</h4><div class='metric-value' style='color:#1976d2 !important'>Rs {ts:,.0f}</div></div>", unsafe_allow_html=True)
+    c3.markdown(f"<div class='metric-card'><h4>Net Profit (صاف منافع)</h4><div class='metric-value' style='color:#2e7d32 !important'>Rs {profit:,.0f}</div></div>", unsafe_allow_html=True)
     
     st.divider()
-    st.subheader("📜 Summary History")
+    st.subheader("📜 پچھلے مہینوں کا خلاصہ (Past Month Summary)")
     sum_df = load_data("Summary")
     if not sum_df.empty: st.dataframe(sum_df, use_container_width=True)
+    else: st.info("No past records found.")
 
 # === E. ADMIN PANEL ===
 elif "ایڈمن پینل" in menu:
-    st.header("⚙️ ایڈمن کنٹرول")
-    st.subheader("Archive & Start New Month")
-    st.warning("⚠️ Warning: Yeh button sara data archive kar de ga aur sheets saaf kar de ga.")
+    st.header("⚙️ ایڈمن کنٹرول پینل")
+    st.subheader("🔴 نیا مہینہ شروع کریں (Start New Month)")
+    st.warning("⚠️ انتباہ: یہ بٹن دبانے سے خریداری، فروخت اور اخراجات کا تمام موجودہ ڈیٹا آرکائیو (Archive) ہو جائے گا اور نئی شیٹس بالکل خالی ہو جائیں گی۔ یہ کام صرف مہینے کے آخر میں کریں۔")
     
     b = load_data("Purchase"); s = load_data("Sale"); e = load_data("Expenses")
     earn = s["Amount"].sum() if not s.empty else 0
     prof = earn - (b["Amount"].sum() if not b.empty else 0) - (e["Amount"].sum() if not e.empty else 0)
     
-    if st.button("🔴 Start New Month (Reset All)"):
-        if reset_month_and_archive(prof, earn):
-            st.success("Mubarak Ho! Purana data archive ho gaya aur nayi sheets tayyar hain."); st.balloons(); st.rerun()
+    if st.button("⚠️ ڈیٹا آرکائیو کریں اور نیا مہینہ شروع کریں", type="primary"):
+        with st.spinner("Processing Monthly Closing..."):
+            if reset_month_and_archive(prof, earn):
+                st.balloons()
+                st.success("✅ مبارک ہو! پچھلا ریکارڈ محفوظ ہو گیا ہے اور نئے مہینے کی شیٹس تیار ہیں۔")
+                time.sleep(2)
+                st.rerun()
+
+st.divider()
+c_f1, c_f2 = st.columns([3,1])
+c_f1.caption("© 2026 SI Traders System | Developed for Refined Business Operations.")
+if st.button("🚪 Logout", key="footer_logout"): st.session_state.clear(); st.rerun()
